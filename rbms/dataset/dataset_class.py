@@ -173,3 +173,37 @@ class RBMDataset(Dataset):
                 dtype=self.dtype,
             )
         return train_dataset, test_dataset
+
+class VariationalDataset(RBMDataset):
+    """
+    Dummy dataset for variational training. 
+    Provides empty data and uniform weights to satisfy the standard PCD training loop.
+    """
+    def __init__(
+        self, 
+        num_visibles: int, 
+        num_chains: int, 
+        device: str = "cuda", 
+        dtype: torch.dtype = torch.float32,
+        variable_type: str = "Bernoulli"
+    ):
+        # Generate dummy numpy arrays to feed into the parent constructor
+        dummy_data = np.zeros((num_chains, num_visibles), dtype=np.float32)
+        dummy_labels = np.zeros(num_chains, dtype=np.int32)
+        dummy_weights = np.ones(num_chains, dtype=np.float32)
+        dummy_names = np.array([f"chain_{i}" for i in range(num_chains)], dtype=object)
+
+        # Initialize the base RBMDataset perfectly
+        super().__init__(
+            data=dummy_data,
+            labels=dummy_labels,
+            weights=dummy_weights,
+            names=dummy_names,
+            dataset_name="Variational Target",
+            variable_type=variable_type,
+            device=device,
+            dtype=dtype
+        )
+        
+        # Flag used by the training loop to identify variational mode if needed
+        self.is_variational = True
