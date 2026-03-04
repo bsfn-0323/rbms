@@ -134,6 +134,39 @@ def _compute_gradient(
     vbias.grad.set_(grad_vbias)
     hbias.grad.set_(grad_hbias)
 
+@torch.jit.script
+def _compute_var_gradient(
+    v_data: Tensor,
+    mh_data: Tensor,
+    w_data: Tensor,
+    v_chain: Tensor,
+    h_chain: Tensor,
+    w_chain: Tensor,
+    vbias: Tensor,
+    hbias: Tensor,
+    weight_matrix: Tensor,
+    centered: bool = True,
+    lambda_l1: float = 0.0,
+    lambda_l2: float = 0.0,
+) -> None:
+    
+    #compute the actual gradient
+
+    if lambda_l1 > 0:
+        grad_weight_matrix -= lambda_l1 * torch.sign(weight_matrix)
+        grad_vbias -= lambda_l1 * torch.sign(vbias)
+        grad_hbias -= lambda_l1 * torch.sign(hbias)
+
+    if lambda_l2 > 0:
+        grad_weight_matrix -= 2 * lambda_l2 * weight_matrix
+        grad_vbias -= 2 * lambda_l2 * vbias
+        grad_hbias -= 2 * lambda_l2 * hbias
+
+    # Attach to the parameters
+
+    weight_matrix.grad.set_(grad_weight_matrix)
+    vbias.grad.set_(grad_vbias)
+    hbias.grad.set_(grad_hbias)
 
 @torch.jit.script
 def _init_chains(

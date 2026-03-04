@@ -144,7 +144,39 @@ def compute_gradient(
         lambda_l2=lambda_l2,
     )
 
+def compute_var_gradient(
+    data: dict[str, Tensor],
+    chains: dict[str, Tensor],
+    params: IIRBM,
+    centered: bool = True,
+    lambda_l1: float = 0.0,
+    lambda_l2: float = 0.0,
+) -> None:
+    """Compute the gradient for each of the parameters and attach it.
 
+    Args:
+        data (dict[str, Tensor]): The data state.
+        chains (dict[str, Tensor]): The parallel chains used for gradient computation.
+        params (IIRBM): The parameters of the RBM.
+        centered (bool, optional): Whether to use centered gradients. Defaults to True.
+        lambda_l1 (float, optional): factor for the L1 regularization. Defaults to 0.
+        lambda_l2 (float, optional): factor for the L2 regularization. Defaults to 0.
+    """
+    _compute_var_gradient(
+        v_data=data["visible"],
+        mh_data=data["hidden_mag"],
+        w_data=data["weights"],
+        v_chain=chains["visible"],
+        h_chain=chains["hidden"],
+        w_chain=chains["weights"],
+        vbias=params.vbias,
+        hbias=params.hbias,
+        weight_matrix=params.weight_matrix,
+        centered=centered,
+        lambda_l1=lambda_l1,
+        lambda_l2=lambda_l2,
+    )
+    
 def init_chains(
     num_samples: int,
     params: IIRBM,
