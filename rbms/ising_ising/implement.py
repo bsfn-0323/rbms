@@ -142,8 +142,8 @@ def _compute_gradient(
 
 @torch.jit.script
 def _compute_var_gradient(
-    J1=J1,
-    J2=J2,
+    J1=J1:  Tensor,
+    J2=J2:  Tensor,
     v_chain: Tensor,
     h_chain: Tensor,
     w_chain: Tensor,
@@ -182,7 +182,7 @@ def _compute_var_gradient(
     grad_hbias = avg_gradF_deltaE_c - avg_gradF_c * avg_deltaE
 
     # Gradients for Visible Bias (b)
-    gradF_b = samples
+    gradF_b = v_chain
     avg_gradF_b = torch.mean(gradF_b, dim=0)
     avg_gradF_deltaE_b = torch.mean(gradF_b * deltaE.unsqueeze(1), dim=0)
     grad_vbias = avg_gradF_deltaE_b - avg_gradF_b * avg_deltaE
@@ -202,6 +202,8 @@ def _compute_var_gradient(
     weight_matrix.grad.set_(-grad_weight_matrix)
     vbias.grad.set_(-grad_vbias)
     hbias.grad.set_(-grad_hbias)
+    
+    return avg_deltaE
 
 @torch.jit.script
 def _init_chains(

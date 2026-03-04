@@ -55,8 +55,10 @@ def fit_batch_pcd(
         chains=parallel_chains, n_steps=gibbs_steps, beta=beta
     )
     
+    logs = {}
+    
     if variational:
-        params.compute_var_gradient(
+        deltaE = params.compute_var_gradient(
             J1=J1,
             J2=J2,
             chains=parallel_chains,
@@ -64,6 +66,9 @@ def fit_batch_pcd(
             lambda_l1=lambda_l1,
             lambda_l2=lambda_l2,
         )
+
+        return parallel_chains,deltaE, logs
+        
     else: 
         params.compute_gradient(
             data=curr_batch,
@@ -73,9 +78,9 @@ def fit_batch_pcd(
             lambda_l2=lambda_l2,
         )
         
-    params.normalize_grad()
-    logs = {}
-    return parallel_chains, logs
+        params.normalize_grad()
+
+        return parallel_chains, logs
 
 def train(
     train_dataset: RBMDataset,
@@ -157,7 +162,7 @@ def train(
                 centered=not (args["no_center"]),
                 lambda_l1=args["L1"],
                 lambda_l2=args["L2"],
-                variational=args["variational"].
+                variational=args["variational"],
             )
             optimizer.step()
             if isinstance(params, PBRBM):

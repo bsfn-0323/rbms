@@ -152,7 +152,7 @@ def compute_var_gradient(
     centered: bool = True,
     lambda_l1: float = 0.0,
     lambda_l2: float = 0.0,
-) -> None:
+) -> float:
     """Compute the gradient for each of the parameters and attach it.
 
     Args:
@@ -164,7 +164,7 @@ def compute_var_gradient(
         lambda_l1 (float, optional): factor for the L1 regularization. Defaults to 0.
         lambda_l2 (float, optional): factor for the L2 regularization. Defaults to 0.
     """
-    _compute_var_gradient(
+    deltaE = _compute_var_gradient(
         J1=J1,
         J2=J2,
         v_chain=chains["visible"],
@@ -178,6 +178,8 @@ def compute_var_gradient(
         lambda_l2=lambda_l2,
     )
     
+    return deltaE
+
 def init_chains(
     num_samples: int,
     params: IIRBM,

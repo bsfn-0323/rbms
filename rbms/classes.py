@@ -85,7 +85,7 @@ class EBM(ABC):
         centered: bool = True,
         lambda_l1: float = 0.0,
         lambda_l2: float = 0.0,
-    ) -> None:
+    ) -> float:
         """Compute the gradient for each of the parameters and attach it.
 
         Args:
@@ -100,7 +100,8 @@ class EBM(ABC):
     @abstractmethod
     def compute_var_gradient(
         self,
-        data: dict[str, Tensor], #this will be dummy
+        J1: Tensor,
+        J2: Tensor,
         chains: dict[str, Tensor],
         centered: bool = True,
         lambda_l1: float = 0.0,
@@ -109,7 +110,8 @@ class EBM(ABC):
         """Compute the gradient of the reversed KL divergence for variational training for each of the parameters and attach it.
 
         Args:
-            data (dict[str, Tensor]): The data state.
+            J1 (Tensor): One-body interaction term.
+            J2 (Tensor): Two-body interaction term.
             chains (dict[str, Tensor]): The parallel chains used for gradient computation.
             centered (bool, optional): Whether to use centered gradients. Defaults to True.
             lambda_l1 (float, optional): factor for the L1 regularization. Defaults to 0.
