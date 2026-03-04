@@ -40,20 +40,25 @@ def fit_batch_pcd(
     Returns:
         Tuple[dict[str, Tensor], dict]: A tuple containing the updated chains and the logs.
     """
-    v_data, w_data = batch
-    # Initialize batch
-    curr_batch = params.init_chains(
-        num_samples=v_data.shape[0],
-        weights=w_data,
-        start_v=v_data,
-    )
+    if variational:
+        J1,J2 = batch
+    else:    
+        v_data, w_data = batch
+        # Initialize batch
+        curr_batch = params.init_chains(
+            num_samples=v_data.shape[0],
+            weights=w_data,
+            start_v=v_data,
+        )
     # sample permanent chains
     parallel_chains = params.sample_state(
         chains=parallel_chains, n_steps=gibbs_steps, beta=beta
     )
+    
     if variational:
         params.compute_var_gradient(
-            data=curr_batch,
+            J1=J1,
+            J2=J2,
             chains=parallel_chains,
             centered=centered,
             lambda_l1=lambda_l1,
@@ -131,7 +136,10 @@ def train(
     with torch.no_grad():
         for idx in range(num_updates + 1, args["num_updates"] + 1):
             rand_idx = torch.randperm(len(train_dataset))[: args["batch_size"]]
-            batch = (train_dataset.data[rand_idx], train_dataset.weights[rand_idx]) #not needed in variational training
+            if args["variational"]:
+                batch = (train_dataset.J1, train_dataset.J2) #not needed in variational training
+            else:
+                batch = (train_dataset.data[rand_idx], train_dataset.weights[rand_idx]) #not needed in variational training
             if args["training_type"] == "rdm":
                 parallel_chains = params.init_chains(parallel_chains["visible"].shape[0])
             elif args["training_type"] == "cd" and not args["variational"]: #if variational == True there is no point in doing cd.

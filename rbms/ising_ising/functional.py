@@ -145,7 +145,8 @@ def compute_gradient(
     )
 
 def compute_var_gradient(
-    data: dict[str, Tensor],
+    J1: Tensor,
+    J2: Tensor,
     chains: dict[str, Tensor],
     params: IIRBM,
     centered: bool = True,
@@ -155,7 +156,8 @@ def compute_var_gradient(
     """Compute the gradient for each of the parameters and attach it.
 
     Args:
-        data (dict[str, Tensor]): The data state.
+        J1 (Tensor): One-body interaction term.
+        J2 (Tensor): Two-body interaction term.
         chains (dict[str, Tensor]): The parallel chains used for gradient computation.
         params (IIRBM): The parameters of the RBM.
         centered (bool, optional): Whether to use centered gradients. Defaults to True.
@@ -163,9 +165,8 @@ def compute_var_gradient(
         lambda_l2 (float, optional): factor for the L2 regularization. Defaults to 0.
     """
     _compute_var_gradient(
-        v_data=data["visible"],
-        mh_data=data["hidden_mag"],
-        w_data=data["weights"],
+        J1=J1,
+        J2=J2,
         v_chain=chains["visible"],
         h_chain=chains["hidden"],
         w_chain=chains["weights"],

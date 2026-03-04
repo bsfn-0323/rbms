@@ -136,9 +136,8 @@ def _compute_gradient(
 
 @torch.jit.script
 def _compute_var_gradient(
-    v_data: Tensor,
-    mh_data: Tensor,
-    w_data: Tensor,
+    J1=J1,
+    J2=J2,
     v_chain: Tensor,
     h_chain: Tensor,
     w_chain: Tensor,

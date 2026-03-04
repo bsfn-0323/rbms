@@ -118,6 +118,21 @@ class IIRBM(RBM):
             lambda_l1=lambda_l1,
             lambda_l2=lambda_l2,
         )
+        
+    def compute_var_gradient(self, J1,J2, chains, centered=True, lambda_l1=0.0, lambda_l2=0.0):
+        _compute_gradient(
+            J1 = J1,
+            J2 = J2,
+            v_chain=chains["visible"],
+            h_chain=chains["hidden_mag"],
+            w_chain=chains["weights"],
+            vbias=self.vbias,
+            hbias=self.hbias,
+            weight_matrix=self.weight_matrix,
+            centered=centered,
+            lambda_l1=lambda_l1,
+            lambda_l2=lambda_l2,
+        )
 
     def independent_model(self):
         return IIRBM(
