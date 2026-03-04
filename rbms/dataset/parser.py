@@ -40,6 +40,16 @@ def add_args_dataset(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         help="(Defaults to None). The proportion of the dataset to use as testing set.",
     )
     dataset_args.add_argument(
+        "--j1",
+        type=str,
+        help="Path to a data file (type should be .npy)"
+    )
+    dataset_args.add_argument(
+        "--j2",
+        type=str,
+        help="Path to a data file (type should be .npy)"
+    )
+    dataset_args.add_argument(
         "--use_weights",
         default=False,
         action="store_true",
