@@ -120,7 +120,7 @@ class IIRBM(RBM):
         )
         
     def compute_var_gradient(self, J1,J2, chains, centered=True, lambda_l1=0.0, lambda_l2=0.0):
-        _compute_gradient(
+        _compute_var_gradient(
             J1 = J1,
             J2 = J2,
             v_chain=chains["visible"],

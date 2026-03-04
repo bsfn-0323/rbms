@@ -67,7 +67,7 @@ def fit_batch_pcd(
             lambda_l2=lambda_l2,
         )
 
-        return parallel_chains,deltaE, logs
+        # return parallel_chains,deltaE, logs
         
     else: 
         params.compute_gradient(
@@ -80,7 +80,7 @@ def fit_batch_pcd(
         
         params.normalize_grad()
 
-        return parallel_chains, logs
+    return parallel_chains, logs
 
 def train(
     train_dataset: RBMDataset,
