@@ -36,16 +36,31 @@ def train_rbm(args: dict):
     checkpoints = get_checkpoints(
         num_updates=args["num_updates"], n_save=args["n_save"], spacing=args["spacing"]
     )
-    train_dataset, test_dataset = load_dataset(
-        dataset_name=args["dataset"],
-        test_dataset_name=args["test_dataset"],
-        subset_labels=args["subset_labels"],
-        use_weights=args["use_weights"],
-        alphabet=args["alphabet"],
-        device=args["device"],
-        dtype=args["dtype"],
-    )
-    print(train_dataset)
+    
+    if args["variational"]:
+        #load J1 J2
+        J1 = torch.from_numpy(np.load(args["j1"])).to(args["dtype"]).to(args["device"]) if args["j1"] is not None else torch.zeros(args["num_visibles"]).to(args["dtype"]).to(args["device"])
+        J2 = torch.from_numpy(np.load(args["j2"])).to(args["dtype"]).to(args["device"]) if args["j1"] is not None else torch.zeros(args["num_visibles"],args["num_visibles"]).to(args["dtype"]).to(args["device"])
+        num_visibles = args["num_visibles"]
+        train_dataset = VariationalDataset(
+            num_visibles=num_visibles,
+            num_chains=args["num_chains"],
+            device=args["device"],
+            dtype=args["dtype"],
+            variable_type=None 
+        )
+        test_dataset = None
+    else:
+        train_dataset, test_dataset = load_dataset(
+            dataset_name=args["dataset"],
+            test_dataset_name=args["test_dataset"],
+            subset_labels=args["subset_labels"],
+            use_weights=args["use_weights"],
+            alphabet=args["alphabet"],
+            device=args["device"],
+            dtype=args["dtype"],
+        )
+        print(train_dataset)
     if args["restore"]:
         with h5py.File(args["filename"], "r") as f:
             model_type = f["model_type"][()].decode()

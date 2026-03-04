@@ -87,6 +87,12 @@ def add_args_rbm(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     """
     rbm_args = parser.add_argument_group("RBM")
     rbm_args.add_argument(
+        "--num_visibles",
+        type=int,
+        default=None,
+        help="(Defaults to 100). Number of visible units.",
+    )
+    rbm_args.add_argument(
         "--num_hiddens",
         type=int,
         default=None,
@@ -212,6 +218,7 @@ default_args: dict[str, Any] = {
     "spacing": "exp",
     "log": True,
     "overwrite": True,
+    "num_visibles":100,
     "num_hiddens": 100,
     "batch_size": 2000,
     "gibbs_steps": 100,

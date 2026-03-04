@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from rbms.dataset.dataset_class import RBMDataset
+from rbms.dataset.dataset_class import RBMDataset,VariationalDataset
 from rbms.dataset.load_fasta import load_FASTA
 from rbms.dataset.load_h5 import load_HDF5
 from rbms.dataset.utils import get_subset_labels, get_unique_indices

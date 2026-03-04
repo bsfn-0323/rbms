@@ -10,7 +10,7 @@ def add_args_dataset(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         "-d",
         "--dataset",
         type=str,
-        required=True,
+        required=False,
         help="Path to a data file (type should be .h5 or .fasta)",
     )
     dataset_args.add_argument(
@@ -42,12 +42,14 @@ def add_args_dataset(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
     dataset_args.add_argument(
         "--j1",
         type=str,
-        help="Path to a data file (type should be .npy)"
+        default=None,
+        help="(Defaults to None, will create a zero tensor). Path to a data file (type should be .npy)"
     )
     dataset_args.add_argument(
         "--j2",
         type=str,
-        help="Path to a data file (type should be .npy)"
+        default=None,
+        help="(Defaults to None, will create a zero tensor). Path to a data file (type should be .npy)"
     )
     dataset_args.add_argument(
         "--use_weights",
