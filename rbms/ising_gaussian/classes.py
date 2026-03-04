@@ -118,6 +118,9 @@ class IGRBM(RBM):
             lambda_l2=lambda_l2,
         )
 
+    def compute_var_gradient(self, *args, **kwargs):
+        raise NotImplementedError(f"Variational training not yet implemented for {self.name}")
+    
     def independent_model(self):
         return IGRBM(
             weight_matrix=torch.zeros_like(self.weight_matrix),

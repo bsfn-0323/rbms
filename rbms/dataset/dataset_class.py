@@ -183,9 +183,9 @@ class VariationalDataset(RBMDataset):
         self, 
         num_visibles: int, 
         num_chains: int, 
-        device: str = "cuda", 
-        dtype: torch.dtype = torch.float32,
-        variable_type: str = "Bernoulli"
+        device: str, 
+        dtype: torch.dtype,
+        variable_type: str"
     ):
         # Generate dummy numpy arrays to feed into the parent constructor
         dummy_data = np.zeros((num_chains, num_visibles), dtype=np.float32)

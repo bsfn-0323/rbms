@@ -116,6 +116,8 @@ class PBRBM(RBM):
             lambda_l1=lambda_l1,
             lambda_l2=lambda_l2,
         )
+    def compute_var_gradient(self, *args, **kwargs):
+        raise NotImplementedError(f"Variational training not yet implemented for {self.name}")
 
     def independent_model(self):
         return PBRBM(
