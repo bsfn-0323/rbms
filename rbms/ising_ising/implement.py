@@ -153,7 +153,7 @@ def _compute_var_gradient(
     centered: bool = True,
     lambda_l1: float = 0.0,
     lambda_l2: float = 0.0,
-) -> None:
+) -> float:
     
     #compute the actual gradient
     #True energy
@@ -228,7 +228,7 @@ def _init_chains(
         v = 2 * torch.bernoulli(mv) - 1
     else:
         # Dummy mean visible
-        mv = torch.ones(start_v, device=device, dtype=dtype)/2
+        mv = torch.ones_like(start_v, device=device, dtype=dtype)/2
         v = start_v.to(device=device, dtype=dtype)
 
     # Initialize chains

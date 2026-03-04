@@ -85,7 +85,7 @@ class EBM(ABC):
         centered: bool = True,
         lambda_l1: float = 0.0,
         lambda_l2: float = 0.0,
-    ) -> float:
+    ) -> None:
         """Compute the gradient for each of the parameters and attach it.
 
         Args:
@@ -106,7 +106,7 @@ class EBM(ABC):
         centered: bool = True,
         lambda_l1: float = 0.0,
         lambda_l2: float = 0.0,
-    ) -> None:
+    ) -> float:
         """Compute the gradient of the reversed KL divergence for variational training for each of the parameters and attach it.
 
         Args:

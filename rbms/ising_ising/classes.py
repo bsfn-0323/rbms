@@ -11,6 +11,7 @@ from rbms.ising_ising.implement import (
     _compute_energy_hiddens,
     _compute_energy_visibles,
     _compute_gradient,
+    _compute_var_gradient,
     _init_chains,
     _init_parameters,
     _sample_hiddens,

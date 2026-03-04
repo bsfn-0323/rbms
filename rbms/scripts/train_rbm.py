@@ -4,6 +4,7 @@ import h5py
 import torch
 
 from rbms.dataset import load_dataset
+from rbms.dataset.dataset_class import VariationalDataset
 from rbms.dataset.parser import add_args_dataset
 from rbms.map_model import map_model
 from rbms.parser import (

@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
-
+from torch import Tensor
 
 class RBMDataset(Dataset):
     """A dataset class for RBM training and evaluation."""
@@ -187,7 +187,7 @@ class VariationalDataset(RBMDataset):
         num_chains: int, 
         device: str, 
         dtype: torch.dtype,
-        variable_type: str"
+        variable_type: str
     ):
         # Generate dummy numpy arrays to feed into the parent constructor
         dummy_data = np.zeros((num_chains, num_visibles), dtype=np.float32)
@@ -196,6 +196,8 @@ class VariationalDataset(RBMDataset):
         dummy_names = np.array([f"chain_{i}" for i in range(num_chains)], dtype=object)
         self.num_chains = num_chains
         self.num_visibles = num_visibles
+        self.J1=J1
+        self.J2=J2
         # Initialize the base RBMDataset perfectly
         super().__init__(
             data=dummy_data,
