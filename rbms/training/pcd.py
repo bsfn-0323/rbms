@@ -26,6 +26,7 @@ def fit_batch_pcd(
     centered: bool = True,
     lambda_l1: float = 0.0,
     lambda_l2: float = 0.0,
+    variational: bool = False,
 ) -> tuple[dict[str, Tensor], dict]:
     """Sample the EBM and compute the gradient.
 
@@ -50,17 +51,26 @@ def fit_batch_pcd(
     parallel_chains = params.sample_state(
         chains=parallel_chains, n_steps=gibbs_steps, beta=beta
     )
-    params.compute_gradient(
-        data=curr_batch,
-        chains=parallel_chains,
-        centered=centered,
-        lambda_l1=lambda_l1,
-        lambda_l2=lambda_l2,
-    )
+    if variational:
+        params.compute_var_gradient(
+            data=curr_batch,
+            chains=parallel_chains,
+            centered=centered,
+            lambda_l1=lambda_l1,
+            lambda_l2=lambda_l2,
+        )
+    else: 
+        params.compute_gradient(
+            data=curr_batch,
+            chains=parallel_chains,
+            centered=centered,
+            lambda_l1=lambda_l1,
+            lambda_l2=lambda_l2,
+        )
+        
     params.normalize_grad()
     logs = {}
     return parallel_chains, logs
-
 
 def train(
     train_dataset: RBMDataset,
@@ -121,10 +131,10 @@ def train(
     with torch.no_grad():
         for idx in range(num_updates + 1, args["num_updates"] + 1):
             rand_idx = torch.randperm(len(train_dataset))[: args["batch_size"]]
-            batch = (train_dataset.data[rand_idx], train_dataset.weights[rand_idx])
+            batch = (train_dataset.data[rand_idx], train_dataset.weights[rand_idx]) #not needed in variational training
             if args["training_type"] == "rdm":
                 parallel_chains = params.init_chains(parallel_chains["visible"].shape[0])
-            elif args["training_type"] == "cd":
+            elif args["training_type"] == "cd" and not args["variational"]: #if variational == True there is no point in doing cd.
                 parallel_chains = params.init_chains(
                     batch[0].shape[0], weights=batch[1], start_v=batch[0]
                 )
@@ -139,6 +149,7 @@ def train(
                 centered=not (args["no_center"]),
                 lambda_l1=args["L1"],
                 lambda_l2=args["L2"],
+                variational=args["variational"].
             )
             optimizer.step()
             if isinstance(params, PBRBM):
