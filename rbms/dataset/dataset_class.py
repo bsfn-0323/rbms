@@ -181,6 +181,8 @@ class VariationalDataset(RBMDataset):
     """
     def __init__(
         self, 
+        J1:Tensor,
+        J2:Tensor,
         num_visibles: int, 
         num_chains: int, 
         device: str, 
@@ -192,7 +194,8 @@ class VariationalDataset(RBMDataset):
         dummy_labels = np.zeros(num_chains, dtype=np.int32)
         dummy_weights = np.ones(num_chains, dtype=np.float32)
         dummy_names = np.array([f"chain_{i}" for i in range(num_chains)], dtype=object)
-
+        self.num_chains = num_chains
+        self.num_visibles = num_visibles
         # Initialize the base RBMDataset perfectly
         super().__init__(
             data=dummy_data,
@@ -206,4 +209,13 @@ class VariationalDataset(RBMDataset):
         )
         
         # Flag used by the training loop to identify variational mode if needed
-        self.is_variational = True
+        # self.is_variational = True
+    def split_train_test(
+        self,
+        rng: np.random.Generator,
+        train_size: float,
+        test_size: float | None = None,
+    ) -> tuple[Self, Self | None]:
+        return self,None
+    def get_num_visibles(self):
+        return self.num_visibles

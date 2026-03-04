@@ -43,6 +43,8 @@ def train_rbm(args: dict):
         J2 = torch.from_numpy(np.load(args["j2"])).to(args["dtype"]).to(args["device"]) if args["j1"] is not None else torch.zeros(args["num_visibles"],args["num_visibles"]).to(args["dtype"]).to(args["device"])
         num_visibles = args["num_visibles"]
         train_dataset = VariationalDataset(
+            J1=J1,
+            J2=J2,
             num_visibles=num_visibles,
             num_chains=args["num_chains"],
             device=args["device"],
