@@ -9,6 +9,7 @@ from rbms.ising_ising.implement import (
     _compute_energy_hiddens,
     _compute_energy_visibles,
     _compute_gradient,
+    _compute_var_gradient,
     _init_chains,
     _init_parameters,
     _sample_hiddens,
@@ -140,6 +141,32 @@ def compute_gradient(
         centered=centered,
     )
 
+def compute_var_gradient(
+    J1: Tensor,
+    J2: Tensor,
+    chains: dict[str, Tensor],
+    params: IIRBM,
+) -> float:
+    """Compute the gradient for each of the parameters and attach it.
+
+    Args:
+        J1 (Tensor): One-body interaction term.
+        J2 (Tensor): Two-body interaction term.
+        chains (dict[str, Tensor]): The parallel chains used for gradient computation.
+        params (IIRBM): The parameters of the RBM.
+    """
+    deltaE = _compute_var_gradient(
+        J1=J1,
+        J2=J2,
+        v_chain=chains["visible"],
+        h_chain=chains["hidden"],
+        w_chain=chains["weights"],
+        vbias=params.vbias,
+        hbias=params.hbias,
+        weight_matrix=params.weight_matrix,
+    )
+    
+    return deltaE
 
 def init_chains(
     num_samples: int,

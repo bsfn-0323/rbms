@@ -126,6 +126,9 @@ class PBRBM(RBM):
             centered=centered,
         )
 
+    def compute_var_gradient(self, *args, **kwargs):
+        raise NotImplementedError(f"Variational training not yet implemented for {self.name}")
+
     def independent_model(self):
         return PBRBM(
             weight_matrix=torch.zeros_like(self.weight_matrix),

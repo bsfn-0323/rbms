@@ -11,6 +11,7 @@ from rbms.ising_ising.implement import (
     _compute_energy_hiddens,
     _compute_energy_visibles,
     _compute_gradient,
+    _compute_var_gradient,
     _init_chains,
     _init_parameters,
     _sample_hiddens,
@@ -120,6 +121,18 @@ class IIRBM(RBM):
             hbias=self.hbias,
             weight_matrix=self.weight_matrix,
             centered=centered,
+        )
+
+    def compute_var_gradient(self, J1,J2, chains):
+        _compute_var_gradient(
+            J1 = J1,
+            J2 = J2,
+            v_chain=chains["visible"],
+            h_chain=chains["hidden_mag"],
+            w_chain=chains["weights"],
+            vbias=self.vbias,
+            hbias=self.hbias,
+            weight_matrix=self.weight_matrix,
         )
 
     def independent_model(self):

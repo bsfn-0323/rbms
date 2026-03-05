@@ -127,6 +127,9 @@ class IGRBM(RBM):
             weight_matrix=self.weight_matrix,
             centered=centered,
         )
+        
+    def compute_var_gradient(self, *args, **kwargs):
+        raise NotImplementedError(f"Variational training not yet implemented for {self.name}")
 
     def independent_model(self):
         return IGRBM(

@@ -107,6 +107,21 @@ class EBM(ABC):
         """
         ...
 
+    def compute_var_gradient(
+        self,
+        J1: Tensor,
+        J2: Tensor,
+        chains: dict[str, Tensor],
+    ) -> float:
+        """Compute the gradient of the reversed KL divergence for variational training for each of the parameters and attach it.
+
+        Args:
+            J1 (Tensor): One-body interaction term.
+            J2 (Tensor): Two-body interaction term.
+            chains (dict[str, Tensor]): The parallel chains used for gradient computation.
+        """
+        ...
+        
     @abstractmethod
     def parameters(self) -> list[Tensor]:
         """Returns a list containing the parameters of the RBM.

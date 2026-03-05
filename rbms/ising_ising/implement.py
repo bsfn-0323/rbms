@@ -109,6 +109,62 @@ def _compute_gradient(
     vbias.grad = grad_vbias
     hbias.grad = grad_hbias
 
+def _compute_var_gradient(
+    J1:  Tensor,
+    J2:  Tensor,
+    v_chain: Tensor,
+    h_chain: Tensor,
+    w_chain: Tensor,
+    vbias: Tensor,
+    hbias: Tensor,
+    weight_matrix: Tensor,
+) -> float:
+    
+    #compute the actual gradient
+    #True energy
+    betaH = _compute_hamiltonian(v_chain,J1,J2)
+    #Compute local field 
+    local_field = hbias + (v_chain@weight_matrix)
+    tanh_term = torch.tanh(local_field)
+    #Energy of visible layer
+    F = _compute_energy_visibles(v_chain,vbias,hbias,weight_matrix)
+    #Energy difference
+    deltaE = -betaH + F
+
+    gradF_w = torch.bmm(v_chain.unsqueeze(2), tanh_term.unsqueeze(1))
+        
+    avg_gradF_w = torch.mean(gradF_w, dim=0)
+    avg_deltaE = torch.mean(deltaE)
+    print(avg_deltaE/64)
+    # Covariance term: <gradF * deltaE>
+    avg_gradF_deltaE_w = torch.mean(gradF_w * deltaE.view(-1, 1, 1), dim=0)
+    grad_weight_matrix = avg_gradF_deltaE_w - avg_gradF_w * avg_deltaE
+    
+    # Gradients for Hidden Bias (c)
+    gradF_c = tanh_term
+    avg_gradF_c = torch.mean(gradF_c, dim=0)
+    avg_gradF_deltaE_c = torch.mean(gradF_c * deltaE.unsqueeze(1), dim=0)
+    grad_hbias = avg_gradF_deltaE_c - avg_gradF_c * avg_deltaE
+
+    # Gradients for Visible Bias (b)
+    gradF_b = v_chain
+    avg_gradF_b = torch.mean(gradF_b, dim=0)
+    avg_gradF_deltaE_b = torch.mean(gradF_b * deltaE.unsqueeze(1), dim=0)
+    grad_vbias = avg_gradF_deltaE_b - avg_gradF_b * avg_deltaE
+    
+    # Attach to the parameters
+
+    weight_matrix.grad = grad_weight_matrix
+    vbias.grad = grad_vbias
+    hbias.grad = grad_hbias
+    return avg_deltaE
+
+def _compute_hamiltonian(
+    v:Tensor, J1: Tensor, J2:Tensor
+) -> Tensor:
+    field = v@J1
+    interaction = ((v @ J2) * v).sum(1)
+    return -field - 0.5*interaction
 
 def _init_chains(
     num_samples: int,
