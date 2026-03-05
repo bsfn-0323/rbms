@@ -41,25 +41,36 @@ def train(
     start = time.perf_counter()
 
     for idx in range(curr_update + 1, num_updates + 1):
-        batch = train_dataset.batch(batch_size)
-        data, weights = batch["data"], batch["weights"]
-
+        
         for opt in optimizer:
             opt.zero_grad(set_to_none=False)
+        #There should be an if logic for variational
+        if args['variational']:
+            j1,j2 = train_dataset.J1,train_dataset.J2
+            parallel_chains= sampler.get_conf_grad(batch=None) 
+            params.compute_var_gradient(
+                j1=j1,
+                j2=j2,
+                chains=parallel_chains,
+                centered=centered, #noneed
+            )
+        else:
+            batch = train_dataset.batch(batch_size)             
+            data, weights = batch["data"], batch["weights"]     
+            
+            # Initialize batch
+            curr_batch = params.init_chains(                    
+                num_samples=data.shape[0],
+                weights=weights,
+                start_v=data,
+            )
+            parallel_chains = sampler.get_conf_grad(batch=data) 
 
-        # Initialize batch
-        curr_batch = params.init_chains(
-            num_samples=data.shape[0],
-            weights=weights,
-            start_v=data,
-        )
-        parallel_chains = sampler.get_conf_grad(batch=data)
-
-        params.compute_gradient(
-            data=curr_batch,
-            chains=parallel_chains,
-            centered=centered,
-        )
+            params.compute_gradient(
+                data=curr_batch,
+                chains=parallel_chains,
+                centered=centered,
+            )
         # Do a bunch of modification on the gradient
 
         pre_grad_update(input=None)

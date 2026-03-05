@@ -128,11 +128,11 @@ def _init_chains(
 
     if start_v is None:
         # Dummy mean visible
-        mv = torch.zeros(size=(num_samples, num_visibles), device=device, dtype=dtype)
+        mv = torch.ones(size=(num_samples, num_visibles), device=device, dtype=dtype)/2
         v = 2 * torch.bernoulli(mv) - 1
     else:
         # Dummy mean visible
-        mv = torch.zeros_like(start_v, device=device, dtype=dtype)
+        mv = torch.ones_like(start_v, device=device, dtype=dtype)/2
         v = start_v.to(device=device, dtype=dtype)
 
     # Initialize chains
