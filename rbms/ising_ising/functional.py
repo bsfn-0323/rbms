@@ -155,7 +155,7 @@ def compute_var_gradient(
         chains (dict[str, Tensor]): The parallel chains used for gradient computation.
         params (IIRBM): The parameters of the RBM.
     """
-    deltaE = _compute_var_gradient(
+    loss = _compute_var_gradient(
         J1=J1,
         J2=J2,
         v_chain=chains["visible"],
@@ -166,7 +166,7 @@ def compute_var_gradient(
         weight_matrix=params.weight_matrix,
     )
     
-    return deltaE
+    return loss
 
 def init_chains(
     num_samples: int,

@@ -157,7 +157,10 @@ def _compute_var_gradient(
     weight_matrix.grad = grad_weight_matrix
     vbias.grad = grad_vbias
     hbias.grad = grad_hbias
-    return avg_deltaE
+    
+    loss = 0.5*(deltaE - avg_deltaE).pow(2).mean()
+    # print(loss)
+    return loss.item()
 
 def _compute_hamiltonian(
     v:Tensor, J1: Tensor, J2:Tensor
@@ -210,8 +213,9 @@ def _init_parameters(
         torch.randn(size=(num_visibles, num_hiddens), device=device, dtype=dtype)
         * var_init
     )
-    frequencies = data.mean(0)
-    frequencies = torch.clamp(frequencies, min=-(1.0 - eps), max=(1.0 - eps))
-    vbias = torch.atanh(frequencies).to(device=device, dtype=dtype)
+    # frequencies = data.mean(0)
+    # frequencies = torch.clamp(frequencies, min=-(1.0 - eps), max=(1.0 - eps))
+    # vbias = torch.atanh(frequencies).to(device=device, dtype=dtype)
+    vbias = torch.zeros(num_visibles,device = device,dtype=dtype)
     hbias = torch.zeros(num_hiddens, device=device, dtype=dtype)
     return vbias, hbias, weight_matrix

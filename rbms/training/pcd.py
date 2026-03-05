@@ -49,7 +49,7 @@ def train(
         if variational:
             j1,j2 = train_dataset.J1,train_dataset.J2
             parallel_chains= sampler.get_conf_grad(batch=None) 
-            params.compute_var_gradient(
+            loss = params.compute_var_gradient(
                 J1=j1,
                 J2=j2,
                 chains=parallel_chains,
@@ -107,6 +107,9 @@ def train(
             for i in range(len(optimizer)):
                 pbar.write(f"    - {names_params[i]} : {learning_rates[i]:.6f}")
 
+            if variational:
+                pbar.write("loss : ")
+                pbar.write(f"{loss:.4f}")
             # pbar.write(metrics)
             curr_time = time.perf_counter() - start
             learning_rate = torch.tensor([opt.param_groups[0]["lr"] for opt in optimizer])
