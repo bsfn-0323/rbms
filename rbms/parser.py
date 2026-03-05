@@ -71,6 +71,12 @@ def add_args_saves(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
 def add_args_init_rbm(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     rbm_args = parser.add_argument_group("RBM")
     rbm_args.add_argument(
+        "--num_visibles",
+        type=int,
+        default=None,
+        help="(Defaults to 100). Number of visible units.",
+    )
+    rbm_args.add_argument(
         "--num_hiddens",
         type=int,
         default=None,
@@ -87,6 +93,17 @@ def add_args_init_rbm(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         type=str,
         default=None,
         help="(Defaults to None). Model to use. If None is provided, will be a RBM with the same visible type as the dataset and binary hiddens. If restore, this argument is ignored.",
+    )
+    rbm_args.add_argument(
+        "--variational",
+        default=False,
+        action='store_true',
+        help="(Defaults to False). Put to flag to use variational training."
+    )
+    rbm_args.add_argument(
+        "--vartemp",
+        default=1.0,
+        help="(Defaults to 1.0). Temperature of the target model in variational training."
     )
     return parser
 
