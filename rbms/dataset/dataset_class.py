@@ -213,8 +213,6 @@ class VarRBMDataset(RBMDataset):
         J2:Tensor,
         num_visibles: int, 
         num_chains: int, 
-        device: str, 
-        dtype: torch.dtype,
         dataset_name: str,
         variable_type: str,
         device: torch.device | str = "cuda",

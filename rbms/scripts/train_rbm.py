@@ -50,17 +50,21 @@ def main(args, map_model=map_model):
     #if logic
     if args["variational"]:
         #load J1 J2
+        temp = args['vartemp']
         J1 = torch.from_numpy(np.load(args["j1"])).to(args["dtype"]).to(args["device"]) if args["j1"] is not None else torch.zeros(args["num_visibles"]).to(args["dtype"]).to(args["device"])
         J2 = torch.from_numpy(np.load(args["j2"])).to(args["dtype"]).to(args["device"]) if args["j2"] is not None else torch.zeros(args["num_visibles"],args["num_visibles"]).to(args["dtype"]).to(args["device"])
+        J1 = J1/temp
+        J2 = J2/temp
         num_visibles = args["num_visibles"]
-        train_dataset = VariationalDataset(
+        train_dataset = VarRBMDataset(
             J1=J1,
             J2=J2,
             num_visibles=num_visibles,
             num_chains=args["num_chains"],
             device=args["device"],
             dtype=args["dtype"],
-            variable_type=None 
+            dataset_name=args["dataset"],
+            variable_type="ising",
         )
         test_dataset = None
     else:
@@ -184,6 +188,7 @@ def main(args, map_model=map_model):
         checkpoints=checkpoints,
         num_updates=args["num_updates"],
         filename=args["filename"],
+        variational=args["variational"]
     )
 
 

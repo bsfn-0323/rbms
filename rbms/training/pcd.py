@@ -28,6 +28,7 @@ def train(
     checkpoints: np.ndarray,
     num_updates: int,
     filename: str,
+    variational:bool,
 ):
     pbar = tqdm(
         initial=curr_update,
@@ -45,14 +46,13 @@ def train(
         for opt in optimizer:
             opt.zero_grad(set_to_none=False)
         #There should be an if logic for variational
-        if args['variational']:
+        if variational:
             j1,j2 = train_dataset.J1,train_dataset.J2
             parallel_chains= sampler.get_conf_grad(batch=None) 
             params.compute_var_gradient(
-                j1=j1,
-                j2=j2,
+                J1=j1,
+                J2=j2,
                 chains=parallel_chains,
-                centered=centered, #noneed
             )
         else:
             batch = train_dataset.batch(batch_size)             
@@ -73,7 +73,7 @@ def train(
             )
         # Do a bunch of modification on the gradient
 
-        pre_grad_update(input=None)
+        pre_grad_update(None)
         params.pre_grad_update()
         sampler.pre_grad_update()
 

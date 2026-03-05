@@ -182,8 +182,10 @@ def _restore_training(
     # Initialize gradients for the parameters
     params.init_grad()
 
-    train_dataset.match_model_variable_type(params.visible_type)
-    test_dataset.match_model_variable_type(params.visible_type)
+    if test_dataset is not None:
+        test_dataset.match_model_variable_type(params.visible_type)
+    if train_dataset is not None:
+        train_dataset.match_model_variable_type(params.visible_type)
     return (
         params,
         parallel_chains,

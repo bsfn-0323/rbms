@@ -11,6 +11,7 @@ def add_args_dataset(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         "--dataset",
         type=str,
         required=False,
+        default=None,
         help="Path to a data file (type should be .h5 or .fasta)",
     )
     dataset_args.add_argument(

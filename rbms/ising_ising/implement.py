@@ -135,7 +135,7 @@ def _compute_var_gradient(
         
     avg_gradF_w = torch.mean(gradF_w, dim=0)
     avg_deltaE = torch.mean(deltaE)
-    print(avg_deltaE/64)
+    # print(avg_deltaE/64)
     # Covariance term: <gradF * deltaE>
     avg_gradF_deltaE_w = torch.mean(gradF_w * deltaE.view(-1, 1, 1), dim=0)
     grad_weight_matrix = avg_gradF_deltaE_w - avg_gradF_w * avg_deltaE

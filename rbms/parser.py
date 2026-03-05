@@ -102,6 +102,7 @@ def add_args_init_rbm(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
     )
     rbm_args.add_argument(
         "--vartemp",
+        type=float,
         default=1.0,
         help="(Defaults to 1.0). Temperature of the target model in variational training."
     )
