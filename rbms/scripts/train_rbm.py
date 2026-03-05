@@ -45,16 +45,33 @@ def main(args, map_model=map_model):
         n_save=args["n_save"],
         spacing=args["spacing"],
     )
-    train_dataset, test_dataset = load_dataset(
-        dataset_name=args["dataset"],
-        test_dataset_name=args["test_dataset"],
-        subset_labels=args["subset_labels"],
-        use_weights=args["use_weights"],
-        alphabet=args["alphabet"],
-        remove_duplicates=args["remove_duplicates"],
-        device=args["device"],
-        dtype=args["dtype"],
-    )
+    #if logic
+    if args["variational"]:
+        #load J1 J2
+        J1 = torch.from_numpy(np.load(args["j1"])).to(args["dtype"]).to(args["device"]) if args["j1"] is not None else torch.zeros(args["num_visibles"]).to(args["dtype"]).to(args["device"])
+        J2 = torch.from_numpy(np.load(args["j2"])).to(args["dtype"]).to(args["device"]) if args["j2"] is not None else torch.zeros(args["num_visibles"],args["num_visibles"]).to(args["dtype"]).to(args["device"])
+        num_visibles = args["num_visibles"]
+        train_dataset = VariationalDataset(
+            J1=J1,
+            J2=J2,
+            num_visibles=num_visibles,
+            num_chains=args["num_chains"],
+            device=args["device"],
+            dtype=args["dtype"],
+            variable_type=None 
+        )
+        test_dataset = None
+    else:
+        train_dataset, test_dataset = load_dataset(
+            dataset_name=args["dataset"],
+            test_dataset_name=args["test_dataset"],
+            subset_labels=args["subset_labels"],
+            use_weights=args["use_weights"],
+            alphabet=args["alphabet"],
+            remove_duplicates=args["remove_duplicates"],
+            device=args["device"],
+            dtype=args["dtype"],
+        )
     flags = ["checkpoint"]
     if not args["restore"]:
         args = set_args_default(args, default_args=default_args)
