@@ -201,3 +201,59 @@ class RBMDataset(Dataset):
             case _:
                 pass
         return sampled_batch
+
+class VarRBMDataset(RBMDataset):
+    """
+    Dummy dataset for variational training. 
+    Provides empty data and uniform weights to satisfy the standard PCD training loop.
+    """
+    def __init__(
+        self, 
+        J1:Tensor,
+        J2:Tensor,
+        num_visibles: int, 
+        num_chains: int, 
+        device: str, 
+        dtype: torch.dtype,
+        dataset_name: str,
+        variable_type: str,
+        device: torch.device | str = "cuda",
+        dtype: torch.dtype = torch.float32,
+    ):
+        # Generate dummy numpy arrays to feed into the parent constructor
+        dummy_data = np.zeros((num_chains, num_visibles), dtype=np.float32)
+        dummy_labels = np.zeros(num_chains, dtype=np.int32)
+        dummy_weights = np.ones(num_chains, dtype=np.float32)
+        dummy_names = np.array([f"chain_{i}" for i in range(num_chains)], dtype=object)
+        
+        self.num_chains = num_chains
+        self.num_visibles = num_visibles
+        self.J1=J1
+        self.J2=J2
+        # self.dataset_name = dataset_name
+        # self.device = device
+        # self.dtype = dtype
+        # self.variable_type: str = variable_type
+        
+        # Initialize the base RBMDataset perfectly
+        super().__init__(
+            data=dummy_data,
+            labels=dummy_labels,
+            weights=dummy_weights,
+            names=dummy_names,
+            dataset_name=dataset_name,
+            variable_type=variable_type,
+            device=device,
+            dtype=dtype
+        )
+        
+    def split_train_test(
+        self,
+        rng: np.random.Generator,
+        train_size: float,
+        test_size: float | None = None,
+    ) -> tuple[Self, Self | None]:
+        return self,None
+    
+    def get_num_visibles(self):
+        return self.num_visibles

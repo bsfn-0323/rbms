@@ -2,9 +2,11 @@ import argparse
 
 import h5py
 import torch
+import numpy as np
 
 from rbms import get_saved_updates
 from rbms.dataset import load_dataset
+from rbms.dataset.dataset_class import VarRBMDataset
 from rbms.dataset.parser import add_args_dataset
 from rbms.map_model import map_model
 from rbms.optim import setup_optim
