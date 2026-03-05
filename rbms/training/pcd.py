@@ -66,7 +66,6 @@ def fit_batch_pcd(
             lambda_l1=lambda_l1,
             lambda_l2=lambda_l2,
         )
-
         # return parallel_chains,deltaE, logs
         
     else: 

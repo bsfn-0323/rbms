@@ -136,9 +136,9 @@ def _compute_gradient(
 
     # Attach to the parameters
 
-    weight_matrix.grad.set_(grad_weight_matrix)
-    vbias.grad.set_(grad_vbias)
-    hbias.grad.set_(grad_hbias)
+    weight_matrix.grad.set_(-grad_weight_matrix)
+    vbias.grad.set_(-grad_vbias)
+    hbias.grad.set_(-grad_hbias)
 
 @torch.jit.script
 def _compute_var_gradient(
@@ -165,16 +165,16 @@ def _compute_var_gradient(
     F = _compute_energy_visibles(v_chain,vbias,hbias,weight_matrix)
     #Energy difference
     deltaE = -betaH + F
-    
+
     gradF_w = torch.bmm(v_chain.unsqueeze(2), tanh_term.unsqueeze(1))
         
     avg_gradF_w = torch.mean(gradF_w, dim=0)
     avg_deltaE = torch.mean(deltaE)
-    
+    print(avg_deltaE/64)
     # Covariance term: <gradF * deltaE>
     avg_gradF_deltaE_w = torch.mean(gradF_w * deltaE.view(-1, 1, 1), dim=0)
     grad_weight_matrix = avg_gradF_deltaE_w - avg_gradF_w * avg_deltaE
-
+    
     # Gradients for Hidden Bias (c)
     gradF_c = tanh_term
     avg_gradF_c = torch.mean(gradF_c, dim=0)
@@ -202,7 +202,6 @@ def _compute_var_gradient(
     weight_matrix.grad.set_(grad_weight_matrix)
     vbias.grad.set_(grad_vbias)
     hbias.grad.set_(grad_hbias)
-    
     return avg_deltaE
 
 @torch.jit.script
@@ -242,7 +241,7 @@ def _init_parameters(
     data: Tensor,
     device: torch.device,
     dtype: torch.dtype,
-    var_init: float = 1e-4,
+    var_init: float = 1e-2,
 ) -> tuple[Tensor, Tensor, Tensor]:
     _, num_visibles = data.shape
     eps = 1e-4

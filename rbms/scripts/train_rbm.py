@@ -2,6 +2,7 @@ import argparse
 
 import h5py
 import torch
+import numpy as np
 
 from rbms.dataset import load_dataset
 from rbms.dataset.dataset_class import VariationalDataset
@@ -41,7 +42,7 @@ def train_rbm(args: dict):
     if args["variational"]:
         #load J1 J2
         J1 = torch.from_numpy(np.load(args["j1"])).to(args["dtype"]).to(args["device"]) if args["j1"] is not None else torch.zeros(args["num_visibles"]).to(args["dtype"]).to(args["device"])
-        J2 = torch.from_numpy(np.load(args["j2"])).to(args["dtype"]).to(args["device"]) if args["j1"] is not None else torch.zeros(args["num_visibles"],args["num_visibles"]).to(args["dtype"]).to(args["device"])
+        J2 = torch.from_numpy(np.load(args["j2"])).to(args["dtype"]).to(args["device"]) if args["j2"] is not None else torch.zeros(args["num_visibles"],args["num_visibles"]).to(args["dtype"]).to(args["device"])
         num_visibles = args["num_visibles"]
         train_dataset = VariationalDataset(
             J1=J1,
