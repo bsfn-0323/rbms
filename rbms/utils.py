@@ -233,11 +233,12 @@ def compute_log_likelihood(
     return -(params.compute_energy_visibles(v=v_data) @ w_normalized).item() - log_z
 
 def compute_var_elbo(
-    log_z: float 
+    deltaE:float, log_z: float 
 ) ->float:
     """Compute the ELBO of the reversed KL divergence, given its log partition function.
 
     Args:
+        deltaE (float): energy difference between RBM an target model
         log_z (float): Log partition function.
 
     Returns:

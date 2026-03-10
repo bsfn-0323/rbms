@@ -10,6 +10,7 @@ from rbms.potts_bernoulli.classes import PBRBM
 from rbms.utils import (
     bernoulli_to_ising,
     compute_log_likelihood,
+    compute_var_elbo,
     get_categorical_configurations,
     get_eigenvalues_history,
     get_flagged_updates,
@@ -26,6 +27,7 @@ __all__ = [
     bernoulli_to_ising,
     ising_to_bernoulli,
     compute_log_likelihood,
+    compute_var_elbo,
     get_eigenvalues_history,
     get_saved_updates,
     get_flagged_updates,
