@@ -160,7 +160,7 @@ def _compute_var_gradient(
     
     loss = 0.5*(deltaE - avg_deltaE).pow(2).mean()
     # print(loss)
-    return loss.item()
+    return loss.item(),avg_deltaE.item()
 
 def _compute_hamiltonian(
     v:Tensor, J1: Tensor, J2:Tensor

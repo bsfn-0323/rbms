@@ -6,7 +6,8 @@ from rbms.classes import RBM, EBM
 from rbms.io import load_params
 from rbms.map_model import map_model
 from rbms.parser import add_args_pytorch, match_args_dtype
-from rbms.sampling.pt import pt_sampling
+# from rbms.sampling.pt import pt_sampling
+from rbms.sampler.pt import pt_sampling
 from rbms.utils import check_file_existence, get_saved_updates
 
 

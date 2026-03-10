@@ -112,7 +112,7 @@ class EBM(ABC):
         J1: Tensor,
         J2: Tensor,
         chains: dict[str, Tensor],
-    ) -> float:
+    ) -> tuple[float,float]:
         """Compute the gradient of the reversed KL divergence for variational training for each of the parameters and attach it.
 
         Args:

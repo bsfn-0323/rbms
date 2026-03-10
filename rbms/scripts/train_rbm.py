@@ -162,7 +162,11 @@ def main(args, map_model=map_model):
                 beta=args["beta"],
             )
         case "cd":
-            sampler = CD(params=params, num_steps=args["gibbs_steps"], beta=args["beta"])
+            if args["variational"]: 
+                raise RuntimeError("Variational training doesn't support CD.")
+            else:
+                sampler = CD(params=params, num_steps=args["gibbs_steps"], beta=args["beta"])
+            
         case "rdm":
             sampler = RDM(
                 params=params,
