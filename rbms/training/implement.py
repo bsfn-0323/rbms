@@ -139,7 +139,7 @@ def _restore_training(
     device: str,
     dtype: torch.dtype,
     map_model: dict[str, type[EBM]] = map_model,
-    variational : bool | False,
+    variational : bool = False,
 ) -> tuple[EBM, dict[str, Tensor], int, float, RBMDataset, RBMDataset]:
     # Retrieve the the number of training updates already performed on the model
     print(f"Restoring training from update {target_update}")

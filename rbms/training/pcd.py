@@ -49,13 +49,14 @@ def train(
         if variational:
             j1,j2 = train_dataset.J1,train_dataset.J2
             parallel_chains= sampler.get_conf_grad(batch=None) 
-            loss,deltaE = params.compute_var_gradient(
+            # loss,deltaE = params.compute_var_gradient(
+            loss = params.compute_var_gradient(    
                 J1=j1,
                 J2=j2,
                 chains=parallel_chains,
             )
         else:
-            deltaE=None #Not needed in standard training
+            # deltaE=None #Not needed in standard training
             batch = train_dataset.batch(batch_size)             
             data, weights = batch["data"], batch["weights"]     
             
@@ -98,8 +99,11 @@ def train(
             learning_rates = np.asarray([opt.param_groups[0]["lr"] for opt in optimizer])
 
             metrics = {}
+            # metrics = sampler.get_metrics_display(
+            #     metrics, train_dataset=train_dataset, test_dataset=test_dataset,deltaE=deltaE
+            # )
             metrics = sampler.get_metrics_display(
-                metrics, train_dataset=train_dataset, test_dataset=test_dataset,deltaE=deltaE
+                metrics, train_dataset=train_dataset, test_dataset=test_dataset
             )
             pbar.write(f"=========== Update {idx} ===========")
             for k, v in metrics.items():
