@@ -140,6 +140,7 @@ def main(args, map_model=map_model):
         device=args["device"],
         dtype=args["dtype"],
         map_model=map_model,
+        variational=args["variational"]
     )
 
     optimizer = setup_optim(args["optim"], args, params)

@@ -1,13 +1,11 @@
 import numpy as np
 import torch
-
+import math
 # from ptt.optim.cossim import SGD_cossim
 from torch import Tensor
-from torch.optim import SGD, Optimizer
+from torch.optim import SGD, Optimizer,Adam
 
 from rbms.classes import EBM
-
-
 class SGD_cossim(SGD):
     def __init__(
         self,
@@ -52,14 +50,14 @@ class SGD_cossim(SGD):
             group["lr"] = min(self.max_lr, learning_rate)
             self.prev_grad = curr_grad.clone()
         return super().step(closure)
-
-
 def setup_optim(optim: str, args: dict, params: EBM) -> list[Optimizer]:
     match args["optim"]:
         case "sgd":
             optim_class = SGD
         case "cossim":
             optim_class = SGD_cossim
+        case "adam":
+            optim_class = Adam
         case _:
             print(f"Unrecognized optimizer {args['optim']}, falling back to SGD.")
             optim_class = SGD
@@ -76,6 +74,7 @@ def setup_optim(optim: str, args: dict, params: EBM) -> list[Optimizer]:
             optim_class(
                 [p],
                 lr=learning_rate[i],
+                max_lr=args['max_lr'],
                 maximize=True,
             )
             for i, p in enumerate(params.parameters())

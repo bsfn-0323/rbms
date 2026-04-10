@@ -1,6 +1,7 @@
 import torch
 from torch import Tensor
-
+import h5py
+import numpy as np
 
 def one_hot(
     x: Tensor, num_classes: int = -1, dtype: torch.dtype = torch.float32
@@ -47,3 +48,12 @@ def check_keys_dict(d: dict, names: list[str]):
             raise ValueError(
                 f"""Dictionary params missing key '{k}'\n Provided keys : {d.keys()}\n Expected keys: {names}"""
             )
+
+def load_string(f: h5py.Dataset, k: str | bytes) -> str:
+    # Fix 1: Ensure key is a string
+    # key = k.decode("utf-8") if isinstance(k, bytes) else k
+    val = np.asarray(f[k])
+    # Fix 2: Ensure string values (like 'Reservoir') are strings, not bytes
+    if val.dtype.kind in ["S", "V", "O"]:  # Bytes, Void, or Object (StringDType)
+        val = val.astype(str)
+    return str(val)

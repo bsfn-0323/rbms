@@ -129,7 +129,7 @@ def _init_training(
 
 def _restore_training(
     filename: str,
-    train_dataset: RBMDataset,
+    train_dataset: RBMDataset | None,
     test_dataset: RBMDataset | None,
     num_updates: int,
     target_update: int,
@@ -139,6 +139,7 @@ def _restore_training(
     device: str,
     dtype: torch.dtype,
     map_model: dict[str, type[EBM]] = map_model,
+    variational : bool | False,
 ) -> tuple[EBM, dict[str, Tensor], int, float, RBMDataset, RBMDataset]:
     # Retrieve the the number of training updates already performed on the model
     print(f"Restoring training from update {target_update}")
@@ -167,7 +168,7 @@ def _restore_training(
                 print(f" - {upd}")
                 del f[f"update_{upd}"]
 
-    if test_dataset is None:
+    if test_dataset is None and variational == False:
         print("Splitting dataset")
         train_dataset, test_dataset = train_dataset.split_train_test(
             rng=np.random.default_rng(seed),
@@ -182,9 +183,9 @@ def _restore_training(
     # Initialize gradients for the parameters
     params.init_grad()
 
-    if test_dataset is not None:
+    if test_dataset is not None and variational == False:
         test_dataset.match_model_variable_type(params.visible_type)
-    if train_dataset is not None:
+    if train_dataset is not None and variational == False:
         train_dataset.match_model_variable_type(params.visible_type)
     return (
         params,

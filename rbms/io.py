@@ -131,22 +131,64 @@ def load_model(
     return (params, perm_chains, start)
 
 
+# def save_sampler(filename: str, sampler: Sampler, update: int):
+#     named_params = sampler.named_parameters()
+#     metrics = sampler.get_metrics_save()
+#     name = sampler.name
+#     with h5py.File(filename, "a") as f:
+#         if "sampler" not in f.keys():
+#             f.create_group("sampler")
+#             f["sampler"]["name"] = name
+
+#         # Save the parameters of the model
+#         for n, p in named_params.items():
+#             # Check if the parameter is a string before saving
+#             data = np.string_(p) if isinstance(p, (str, np.str_)) else p
+#             if n in f["sampler"].keys():
+#                 f["sampler"][n][...] = p
+#             else:
+#                 f["sampler"][n] = p
+
+#         if metrics is not None:
+#             upd_grp = f.require_group(f"update_{update}")
+#             for n, p in metrics.items():
+#                 # f[f"update_{update}"][n] = p
+#                 upd_grp[n] = np.string_(p) if isinstance(p, (str, np.str_)) else p
+                
 def save_sampler(filename: str, sampler: Sampler, update: int):
     named_params = sampler.named_parameters()
     metrics = sampler.get_metrics_save()
     name = sampler.name
+    
     with h5py.File(filename, "a") as f:
-        if "sampler" not in f.keys():
-            f.create_group("sampler")
-            f["sampler"]["name"] = name
+        grp = f.require_group("sampler")
+        if "name" not in grp:
+            # np.bytes_ replaces np.string_ in NumPy 2.0+
+            grp.create_dataset("name", data=np.bytes_(name))
 
-        # Save the parameters of the model
         for n, p in named_params.items():
-            if n in f["sampler"].keys():
-                f["sampler"][n][...] = p
+            if hasattr(p, 'dtype') and p.dtype.kind == 'U':
+                p = p.astype('S')
+            elif isinstance(p, (str, np.str_)):
+                p = np.bytes_(p)
+
+            if n in grp:
+                if grp[n].shape == p.shape:
+                    grp[n][...] = p
+                else:
+                    del grp[n]
+                    grp[n] = p
             else:
-                f["sampler"][n] = p
+                grp[n] = p
 
         if metrics is not None:
+            upd_grp = f.require_group(f"update_{update}")
             for n, p in metrics.items():
-                f[f"update_{update}"][n] = p
+                if hasattr(p, 'dtype') and p.dtype.kind == 'U':
+                    p = p.astype('S')
+                elif isinstance(p, (str, np.str_)):
+                    p = np.bytes_(p)
+                
+                if n in upd_grp:
+                    del upd_grp[n]
+                upd_grp[n] = p
