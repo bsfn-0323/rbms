@@ -22,7 +22,8 @@ def dlp_step(
 ) -> Tensor:
     # 1. Forward Proposal
     # local_field_v = torch.matmul(v, W) + vb
-    tanh_term = torch.tanh(hb + torch.matmul(v,W))
+    arg = hb + torch.matmul(v,W)
+    tanh_term = torch.tanh(arg)
     local_field_v = vb + torch.matmul(tanh_term,W.T)
     diff_fw = states - v.unsqueeze(-1)
     
@@ -43,8 +44,8 @@ def dlp_step(
     log_q_fw = q_fw.gather(2, idx_vp).squeeze(-1).sum(dim=1)
 
     # local_field_vp = torch.matmul(vp, W) + vb
-
-    tanh_termp = torch.tanh(hb + torch.matmul(vp,W))
+    argp = hb + torch.matmul(vp,W)
+    tanh_termp = torch.tanh(argp)
     local_field_vp = vb + torch.matmul(tanh_term,W.T)
 
     diff_bw = states - vp.unsqueeze(-1)
@@ -57,11 +58,11 @@ def dlp_step(
     idx_v = (v == shift).long().unsqueeze(-1)
     log_q_bw = q_bw.gather(2, idx_v).squeeze(-1).sum(dim=1)
     
-    energy_new = beta * (local_field_vp * vp).sum(dim=1)
-    energy_old = beta * (local_field_v * v).sum(dim=1)
+    energy_new = (2*torch.cosh(arg)).log().sum(-1) + (v*vb).sum(-1)
+    energy_old = (2*torch.cosh(argp)).log().sum(-1) + (vp*vb).sum(-1)
     d_energy = energy_new - energy_old
     
-    log_mh_ratio = -d_energy + log_q_bw - log_q_fw
+    log_mh_ratio = -beta*d_energy + log_q_bw - log_q_fw
     accept = torch.log(rnd) < log_mh_ratio
     
     return torch.where(accept.unsqueeze(-1), vp, v)
@@ -149,13 +150,13 @@ class DLP(Sampler):
         if self._graph is None:
             # 1. Initialize static buffers
             self._static_v = v.clone()
-            self._static_rnd = torch.rand_like(rnds[0])
+            self._static_rnd = rnds[0].clone() #(B,)
             
             # 2. Warmup
             s = torch.cuda.Stream()
             s.wait_stream(torch.cuda.current_stream())
             with torch.cuda.stream(s):
-                for _ in range(3):
+                for _ in range(100):
                     self._static_v = self.sample_step(self._static_v, self._static_rnd)
             torch.cuda.current_stream().wait_stream(s)
             
