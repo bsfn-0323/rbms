@@ -49,12 +49,13 @@ def train(
         if variational:
             j1,j2 = train_dataset.J1,train_dataset.J2
             parallel_chains= sampler.get_conf_grad(batch=None) 
-            loss = params.compute_var_gradient(
+            loss,deltaE = params.compute_var_gradient(
                 J1=j1,
                 J2=j2,
                 chains=parallel_chains,
             )
         else:
+            deltaE=None #Not needed in standard training
             batch = train_dataset.batch(batch_size)             
             data, weights = batch["data"], batch["weights"]     
             
@@ -98,7 +99,7 @@ def train(
 
             metrics = {}
             metrics = sampler.get_metrics_display(
-                metrics, train_dataset=train_dataset, test_dataset=test_dataset
+                metrics, train_dataset=train_dataset, test_dataset=test_dataset,deltaE=deltaE
             )
             pbar.write(f"=========== Update {idx} ===========")
             for k, v in metrics.items():

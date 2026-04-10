@@ -232,6 +232,19 @@ def compute_log_likelihood(
     w_normalized = w_data / w_data.sum()
     return -(params.compute_energy_visibles(v=v_data) @ w_normalized).item() - log_z
 
+def compute_var_elbo(
+    deltaE:float, log_z: float 
+) ->float:
+    """Compute the ELBO of the reversed KL divergence, given its log partition function.
+
+    Args:
+        deltaE (float): energy difference between RBM an target model
+        log_z (float): Log partition function.
+
+    Returns:
+        float: DKL ELBO.
+    """
+    return -deltaE + log_z
 
 @torch.jit.script
 def swap_chains(
