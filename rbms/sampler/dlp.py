@@ -75,7 +75,7 @@ import torch.nn.functional as F
 #     # v.copy_(new_v)
 #     return new_v
 import torch.nn.functional as F
-@torch.jit.script
+# @torch.jit.script
 def dlp_dmala_step(
     v: Tensor, W: Tensor, vb: Tensor, hb: Tensor,
     beta: float, alpha: float, rnd_fw: Tensor, rnd_mh: Tensor, 
@@ -88,8 +88,9 @@ def dlp_dmala_step(
     diff_fw = states - v.unsqueeze(-1) # (batch, dim, 2)
     
     # Eq (2) from the paper: Discrete Langevin Proposal [cite: 86]
+    diff_fw_sq = diff_fw*diff_fw
     q_fw = torch.log_softmax(
-        (0.5 * beta * local_field_v.unsqueeze(-1) * diff_fw) - (0.5 * diff_fw.pow(2) / alpha),
+        (0.5 * beta * local_field_v.unsqueeze(-1) * diff_fw) - (0.5 * diff_fw_sq / alpha),
         dim=2
     )
     p_plus1 = torch.exp(q_fw[:, :, 0])
@@ -104,8 +105,9 @@ def dlp_dmala_step(
     local_field_vp = vb + torch.matmul(tanh_termp, W.T)
 
     diff_bw = states - vp.unsqueeze(-1)
+    diff_bw_sq = diff_bw*diff_bw
     q_bw = torch.log_softmax(
-        (0.5 * beta * local_field_vp.unsqueeze(-1) * diff_bw) - (0.5 * diff_bw.pow(2) / alpha), 
+        (0.5 * beta * local_field_vp.unsqueeze(-1) * diff_bw) - (0.5 * diff_bw_sq / alpha), 
         dim=2
     )
     idx_v = (v == shift).long().unsqueeze(-1)
