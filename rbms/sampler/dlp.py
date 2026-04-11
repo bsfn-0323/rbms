@@ -78,7 +78,7 @@ import torch.nn.functional as F
 # @torch.jit.script
 def dlp_dmala_step(
     v: Tensor, W: Tensor, vb: Tensor, hb: Tensor,
-    beta: float, alpha: float, rnd_fw: Tensor, rnd_mh: Tensor, 
+    beta: Tensor, alpha: Tensor, rnd_fw: Tensor, rnd_mh: Tensor, 
     states: Tensor, scale: Tensor, shift: Tensor
 ) -> Tensor:
     # 1. Forward Proposal (DLP) - Parallel coordinate updates [cite: 6, 89]
@@ -211,7 +211,8 @@ class DLP(Sampler):
         # 1. Localize and Prepare (Avoid class attribute inspection during capture)
         W = self.params.weight_matrix.detach()
         vb, hb = self.params.vbias.detach(), self.params.hbias.detach()
-        beta, alpha = float(self.beta), float(self.alpha)
+        beta = torch.tensor(self.beta, device=device, dtype=torch.float32)
+        alpha = torch.tensor(self.alpha, device=device, dtype=torch.float32)
         states = self.states.detach() 
         t_scale = torch.as_tensor(self.scale, device=device, dtype=torch.float32)
         t_shift = torch.as_tensor(self.shift, device=device, dtype=torch.float32)
