@@ -78,25 +78,26 @@ import torch.nn.functional as F
 # @torch.jit.script
 def dlp_dmala_step(
     v: Tensor, W: Tensor, vb: Tensor, hb: Tensor,
-    beta: Tensor, alpha: Tensor, rnd_fw: Tensor, rnd_mh: Tensor, 
+    beta: Tensor, half_beta: Tensor, half_inv_alpha: Tensor, 
+    rnd_fw: Tensor, rnd_mh: Tensor, 
     states: Tensor, scale: Tensor, shift: Tensor
 ) -> Tensor:
-    # 1. Forward Proposal (DLP) - Parallel coordinate updates [cite: 6, 89]
+    # 1. Forward Proposal (DLP)
     arg = hb + torch.matmul(v, W)
     tanh_term = torch.sigmoid(arg)
     local_field_v = vb + torch.matmul(tanh_term, W.T)
-    diff_fw = states - v.unsqueeze(-1) # (batch, dim, 2)
+    diff_fw = states - v.unsqueeze(-1)
     
-    # Eq (2) from the paper: Discrete Langevin Proposal [cite: 86]
     diff_fw_sq = diff_fw*diff_fw
+    # Replaced 0.5 literals with precomputed GPU tensors
     q_fw = torch.log_softmax(
-        (0.5 * beta * local_field_v.unsqueeze(-1) * diff_fw) - (0.5 * diff_fw_sq / alpha),
+        (half_beta * local_field_v.unsqueeze(-1) * diff_fw) - (half_inv_alpha * diff_fw_sq),
         dim=2
     )
     p_plus1 = torch.exp(q_fw[:, :, 0])
     vp = scale * (rnd_fw < p_plus1).float() + shift
     
-    # 2. MH Correction (DMALA) [cite: 97]
+    # 2. MH Correction (DMALA)
     idx_vp = (vp == shift).long().unsqueeze(-1)
     log_q_fw = q_fw.gather(2, idx_vp).squeeze(-1).sum(dim=1)
 
@@ -106,18 +107,19 @@ def dlp_dmala_step(
 
     diff_bw = states - vp.unsqueeze(-1)
     diff_bw_sq = diff_bw*diff_bw
+    # Replaced 0.5 literals with precomputed GPU tensors
     q_bw = torch.log_softmax(
-        (0.5 * beta * local_field_vp.unsqueeze(-1) * diff_bw) - (0.5 * diff_bw_sq / alpha), 
+        (half_beta * local_field_vp.unsqueeze(-1) * diff_bw) - (half_inv_alpha * diff_bw_sq), 
         dim=2
     )
     idx_v = (v == shift).long().unsqueeze(-1)
     log_q_bw = q_bw.gather(2, idx_v).squeeze(-1).sum(dim=1)
     
-    # Energy: U(theta) = sum(Softplus) + b*theta 
+    # Energy
     energy_new = F.softplus(argp).sum(-1) + (vp * vb).sum(-1)
     energy_old = F.softplus(arg).sum(-1) + (v * vb).sum(-1)
     
-    # Log MH Ratio [cite: 94]
+    # Log MH Ratio 
     log_mh_ratio = beta * (energy_new - energy_old) + log_q_bw - log_q_fw
     return torch.where(rnd_mh.log() < log_mh_ratio.unsqueeze(-1), vp, v)
 
@@ -208,45 +210,42 @@ class DLP(Sampler):
     def _cudagraph_sample(self, v: torch.Tensor, num_steps: int):
         device = v.device
         
-        # 1. Localize and Prepare (Avoid class attribute inspection during capture)
         W = self.params.weight_matrix.detach()
         vb, hb = self.params.vbias.detach(), self.params.hbias.detach()
-        beta = torch.tensor(self.beta, device=device, dtype=torch.float32)
-        alpha = torch.tensor(self.alpha, device=device, dtype=torch.float32)
-        states = self.states.detach() 
+        
+        # Precompute constants as strict GPU tensors to avoid literal scalar copies during capture
+        t_beta = torch.tensor(self.beta, device=device, dtype=torch.float32)
+        t_half_beta = torch.tensor(0.5 * self.beta, device=device, dtype=torch.float32)
+        t_half_inv_alpha = torch.tensor(0.5 / self.alpha, device=device, dtype=torch.float32)
+        
+        # Force states to the correct device (in case initialized on CPU)
+        states = self.states.detach().to(device) 
         t_scale = torch.as_tensor(self.scale, device=device, dtype=torch.float32)
         t_shift = torch.as_tensor(self.shift, device=device, dtype=torch.float32)
 
-        # 2. Static Buffers
         static_v = v.clone()
         static_rnd_fw = torch.empty((v.shape[0], v.shape[1]), device=device)
-        static_rnd_mh = torch.empty((v.shape[0], 1), device=device) # Shaped for broadcast
+        static_rnd_mh = torch.empty((v.shape[0], 1), device=device) 
         
         capture_stream = torch.cuda.Stream()
         
-        # 3. CRITICAL Warmup: Force JIT compilation OUTSIDE the graph
         with torch.cuda.stream(capture_stream):
-            for _ in range(5): # Extra runs to settle the allocator
+            for _ in range(5): 
                 static_rnd_fw.uniform_()
                 static_rnd_mh.uniform_()
-                # Run the function completely to "burn in" the kernels
-                _ = dlp_dmala_step(static_v, W, vb, hb, beta, alpha, 
+                _ = dlp_dmala_step(static_v, W, vb, hb, t_beta, t_half_beta, t_half_inv_alpha, 
                                    static_rnd_fw, static_rnd_mh, states, t_scale, t_shift)
-        torch.cuda.synchronize() # Wait for compilation to finish
+        torch.cuda.synchronize() 
         
-        # 4. Capture Phase
         g = torch.cuda.CUDAGraph()
         with torch.cuda.graph(g, stream=capture_stream):
-            # Record exactly one step into the graph
-            static_out = dlp_dmala_step(static_v, W, vb, hb, beta, alpha, 
+            static_out = dlp_dmala_step(static_v, W, vb, hb, t_beta, t_half_beta, t_half_inv_alpha, 
                                         static_rnd_fw, static_rnd_mh, states, t_scale, t_shift)
             
-        # 5. Replay Phase (The High-Speed Loop)
         for _ in range(num_steps):
             static_rnd_fw.uniform_()
             static_rnd_mh.uniform_()
             g.replay()
-            # Feed result back into the input buffer for the next MCMC step
             static_v.copy_(static_out)
             
         self.chains['visible'] = static_v.clone()
