@@ -6,7 +6,7 @@ from torch import Tensor
 
 from rbms.classes import EBM, Sampler
 
-@torch.jit.script
+@torch.jit.script 
 def dlp_step(
     v: Tensor, 
     W: Tensor, 
@@ -14,7 +14,8 @@ def dlp_step(
     hb: Tensor,
     beta: float, 
     alpha: float, 
-    rnd: Tensor, 
+    rnd_fw: Tensor, # Added for safe CUDA graph random proposals
+    rnd_mh: Tensor, # Renamed for clarity
     states: Tensor, 
     scale: float, 
     shift: float, 
@@ -23,20 +24,22 @@ def dlp_step(
     # 1. Forward Proposal
     # local_field_v = torch.matmul(v, W) + vb
     arg = hb + torch.matmul(v,W)
-    tanh_term = torch.tanh(arg)
+    # tanh_term = torch.tanh(arg)
+    tanh_term = torch.sigmoid(arg)
     local_field_v = vb + torch.matmul(tanh_term,W.T)
     diff_fw = states - v.unsqueeze(-1)
     
     q_fw = torch.log_softmax(
-        (beta * local_field_v.unsqueeze(-1) * diff_fw) - (0.5 * diff_fw.pow(2) / alpha),
+        (0.5*beta * local_field_v.unsqueeze(-1) * diff_fw) - (0.5 * diff_fw.pow(2) / alpha),
         dim=2
     )
 
     p_plus1 = torch.exp(q_fw[:, :, 0])
     # Maps True/False to {1, -1} for Ising or {1, 0} for Bernoulli
-    vp = scale * (torch.rand_like(p_plus1) < p_plus1).float() + shift
+    vp = scale * (rnd_fw < p_plus1).float() + shift
     
     if not dmala:
+        # v.copy_(vp)
         return vp
         
     # 2. MH Correction
@@ -45,27 +48,32 @@ def dlp_step(
 
     # local_field_vp = torch.matmul(vp, W) + vb
     argp = hb + torch.matmul(vp,W)
-    tanh_termp = torch.tanh(argp)
-    local_field_vp = vb + torch.matmul(tanh_term,W.T)
+    # tanh_termp = torch.tanh(argp)
+    tanh_termp = torch.sigmoid(argp)
+    local_field_vp = vb + torch.matmul(tanh_termp,W.T)
 
     diff_bw = states - vp.unsqueeze(-1)
     
     q_bw = torch.log_softmax(
-        (beta * local_field_vp.unsqueeze(-1) * diff_bw) - (0.5 * diff_bw.pow(2) / alpha), 
+        (0.5*beta * local_field_vp.unsqueeze(-1) * diff_bw) - (0.5 * diff_bw.pow(2) / alpha), 
         dim=2
     )
     
     idx_v = (v == shift).long().unsqueeze(-1)
     log_q_bw = q_bw.gather(2, idx_v).squeeze(-1).sum(dim=1)
     
-    energy_new = (2*torch.cosh(arg)).log().sum(-1) + (v*vb).sum(-1)
-    energy_old = (2*torch.cosh(argp)).log().sum(-1) + (vp*vb).sum(-1)
+    # energy_new = -torch.logaddexp(arg, -arg).sum(-1) - (v * vb).sum(-1)
+    # energy_old = -torch.logaddexp(argp, -argp).sum(-1) - (vp * vb).sum(-1)
+    energy_new = -torch.logaddexp(torch.zeros_like(argp), argp).sum(-1) - (vp * vb).sum(-1)
+    energy_old = -torch.logaddexp(torch.zeros_like(arg), arg).sum(-1) - (v * vb).sum(-1)
     d_energy = energy_new - energy_old
     
     log_mh_ratio = -beta*d_energy + log_q_bw - log_q_fw
-    accept = torch.log(rnd) < log_mh_ratio
+    accept = rnd_mh.log() < log_mh_ratio
     
-    return torch.where(accept.unsqueeze(-1), vp, v)
+    new_v = torch.where(accept.unsqueeze(-1), vp, v)
+    # v.copy_(new_v)
+    return new_v
 
 class DLP(Sampler):
     def __init__(
@@ -81,21 +89,23 @@ class DLP(Sampler):
         self.name = "DLP"
         self.chains = chains
         self.params = params
-        self.beta = beta
-        self.alpha = alpha
+        self.beta = float(beta)
+        self.alpha = float(alpha)
+        # FIX: Force all scalars into GPU Tensors to prevent CPU-syncs during graph capture
+        # self.beta = torch.tensor(beta, device=params.device)
+        # self.alpha = torch.tensor(alpha, device=params.device)
         self.num_steps = num_steps
         self.dmala=dmala
         self.flags = []
         # Setup domain-specific variables (Ising vs Bernoulli)
         if self.params.visible_type == "ising":
             self.states = torch.tensor([1.0, -1.0], device=params.device).view(1, 2)
-            self.scale = 2.0
-            self.shift = -1.0
+            self.scale = torch.tensor(2.0, device=params.device)
+            self.shift = torch.tensor(-1.0, device=params.device)
         elif self.params.visible_type == "bernoulli":
-            # Assuming Bernoulli is {1, 0} to keep index 0 as probability of 1
             self.states = torch.tensor([1.0, 0.0], device=params.device).view(1, 2)
-            self.scale = 1.0
-            self.shift = 0.0
+            self.scale = torch.tensor(1.0, device=params.device)
+            self.shift = torch.tensor(0.0, device=params.device)
         else:
             raise ValueError(f"Unsupported visible_type: {self.params.visible_type}")
 
@@ -113,24 +123,27 @@ class DLP(Sampler):
     #     rnds = torch.randn((v.shape[0],num_steps),device = params.device)
     #     for i in range(num_steps):
     #         v = self.sample_step(v,rnds[:,i])
-    def sample(self, num_steps: int | None, use_cudagraph: bool = False, **kwargs):
+    @torch.no_grad()
+    def sample(self, num_steps: int | None = None, use_cudagraph: bool = False, **kwargs):
         if num_steps is None:
             num_steps = self.num_steps
 
         v = self.chains['visible']
-        rnds = torch.rand((num_steps, v.shape[0]), device=self.params.device) # rand for log(rnd) comparison
-        
-        # Standard execution using JIT
-        if not use_cudagraph:
-            for i in range(num_steps):
-                v = self.sample_step(v, rnds[i])
-            self.chains['visible'] = v
-            return
-            
-        # Optional CUDA Graph execution path for extreme profiling
-        self._cudagraph_sample(v, rnds, num_steps)
 
-    def sample_step(self, v: Tensor, rnd: Tensor) -> Tensor:
+        if use_cudagraph:
+            self._cudagraph_sample(v, num_steps)
+            return
+
+        # Standard Execution Path
+        for _ in range(num_steps):
+            # Generate noise eagerly per step to save VRAM
+            rnd_fw = torch.rand((v.shape[0], v.shape[1]), device=v.device)
+            rnd_mh = torch.rand((v.shape[0],), device=v.device)
+            v = self.sample_step(v, rnd_fw, rnd_mh)
+            
+        self.chains['visible'] = v.clone()
+
+    def sample_step(self, v: Tensor, rnd_fw: Tensor, rnd_mh: Tensor) -> Tensor:
         return dlp_step(
             v=v,
             W=self.params.weight_matrix,
@@ -138,80 +151,56 @@ class DLP(Sampler):
             hb=self.params.hbias,
             beta=self.beta,
             alpha=self.alpha,
-            rnd=rnd,
+            rnd_fw=rnd_fw,
+            rnd_mh=rnd_mh,
             states=self.states,
             scale=self.scale,
             shift=self.shift,
             dmala=self.dmala
         )
 
-    def _cudagraph_sample(self, v: Tensor, rnds: Tensor, num_steps: int):
-        """Captures and replays the step using CUDA Graphs for zero overhead."""
-        if self._graph is None:
-            # 1. Initialize static buffers
-            self._static_v = v.clone()
-            self._static_rnd = rnds[0].clone() #(B,)
-            
-            # 2. Warmup
-            s = torch.cuda.Stream()
-            s.wait_stream(torch.cuda.current_stream())
-            with torch.cuda.stream(s):
-                for _ in range(100):
-                    self._static_v = self.sample_step(self._static_v, self._static_rnd)
-            torch.cuda.current_stream().wait_stream(s)
-            
-            # 3. Capture
-            self._graph = torch.cuda.CUDAGraph()
-            with torch.cuda.graph(self._graph):
-                self._static_v = self.sample_step(self._static_v, self._static_rnd)
+    def _cudagraph_sample(self, v: torch.Tensor, num_steps: int):
+        # 1. Allocate Static Memory Buffers
+        static_v = v.clone()
         
-        # Ensure input buffer matches current chain state
-        self._static_v.copy_(v)
+        # Shapes based on your previous 'rnds_fw' and 'rnds_mh' setup
+        static_rnd_fw = torch.empty((v.shape[0], v.shape[1]), device=v.device)
+        static_rnd_mh = torch.empty((v.shape[0],), device=v.device)
         
-        # 4. Replay
-        for i in range(num_steps):
-            self._static_rnd.copy_(rnds[i])
-            self._graph.replay()
-            
-        self.chains['visible'] = self._static_v.clone()
-    # def sample_step(self,v,rnd):
-    #     # v = self.chains['visible']
-    #     local_field_v = v@params.weight_matrix + params.vbias
-    #     diff_fw = states - v.unsqueeze(-1)
-    #     q_fw = torch.log_softmax(
-    #         self.beta*local_field_v.unsqueeze(-1) * diff_fw - 0.5 * diff_fw.pow(2) / alpha,
-    #         dim = 2
-    #     )
-
-    #     p_plus1 = q_fw[:,:,0].exp()
-    #     vp = 2.0 * (torch.rand_like(p_plus1) < p_plus1).float() - 1.0 #change
+        # 2. Warmup Phase
+        # We must run the operations on a side stream to prepare the memory allocators
+        s = torch.cuda.Stream()
+        s.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(s):
+            for _ in range(3):
+                # Fill dummy noise
+                static_rnd_fw.uniform_()
+                static_rnd_mh.uniform_()
+                # Run the step
+                static_out = self.sample_step(static_v, static_rnd_fw, static_rnd_mh)
+        torch.cuda.current_stream().wait_stream(s)
         
-    #     if not self.dmala:
-    #         return vp
-    #     else:
-    #         idx_xp = (xp == -1.0).long().unsqueeze(-1) #change
-    #         log_q_fw = q_fw.gather(2, idx_xp).squeeze(-1).sum(dim=1)
-
-    #         local_field_vp =  vp@params.weight_matrix + params.vbias
-    #         diff_bw = states - vp.unsqueeze(-1)
-    #         q_bw = torch.log_softmax(
-    #             (beta * local_field_vp.unsqueeze(-1) * diff_bw) - (0.5 * diff_bw.pow(2) / alpha), 
-    #             dim=2
-    #         )
-    #         idx_x = (x == -1.0).long().unsqueeze(-1) #change
-    #         log_q_bw = q_bw.gather(2, idx_x).squeeze(-1).sum(dim=1) # Shape: (B,)
+        # 3. Capture Phase
+        # Record the exact sequence of CUDA kernels
+        g = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(g):
+            static_out = self.sample_step(static_v, static_rnd_fw, static_rnd_mh)
             
-    #         # Batch energy difference ΔE = H(xp) - H(x)
-    #         # Vectorized dot product using element-wise mul + sum: (B,)
-    #         energy_new = beta * (local_field_xp * xp).sum(dim=1)
-    #         energy_old = beta * (local_field_x * x).sum(dim=1)
-    #         d_energy = energy_new - energy_old
+        # 4. Replay Phase (The Loop)
+        for _ in range(num_steps):
+            # HUGE OPTIMIZATION: Generate noise directly IN-PLACE into the static buffers.
+            # This avoids allocating a massive (num_steps, ...) tensor upfront.
+            static_rnd_fw.uniform_()
+            static_rnd_mh.uniform_()
             
-    #         # log(α) = -ΔE + log(q_rev) - log(q_fwd)
-    #         log_mh_ratio = -d_energy + log_q_bw - log_q_fw
+            # Execute the captured graph (microseconds)
+            g.replay()
             
-    #         accept = torch.log(rnd) < log_mh_ratio # Shape: (B,)
-    #         return torch.where(accept.unsqueeze(-1),vp, v)
+            # Feed the output back into the input buffer for the next iteration
+            static_v.copy_(static_out)
+            
+        # Write the final state back to the class dictionary
+        self.chains['visible'] = static_v.clone()
 
     @torch.compiler.disable
     def named_parameters(self):
