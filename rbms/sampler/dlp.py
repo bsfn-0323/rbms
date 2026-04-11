@@ -5,75 +5,119 @@ import torch
 from torch import Tensor
 
 from rbms.classes import EBM, Sampler
-
-@torch.jit.script 
-def dlp_step(
-    v: Tensor, 
-    W: Tensor, 
-    vb: Tensor, 
-    hb: Tensor,
-    beta: float, 
-    alpha: float, 
-    rnd_fw: Tensor, # Added for safe CUDA graph random proposals
-    rnd_mh: Tensor, # Renamed for clarity
-    states: Tensor, 
-    scale: float, 
-    shift: float, 
-    dmala: bool
-) -> Tensor:
-    # 1. Forward Proposal
-    # local_field_v = torch.matmul(v, W) + vb
-    arg = hb + torch.matmul(v,W)
-    # tanh_term = torch.tanh(arg)
-    tanh_term = torch.sigmoid(arg)
-    local_field_v = vb + torch.matmul(tanh_term,W.T)
-    diff_fw = states - v.unsqueeze(-1)
+import torch.nn.functional as F
+# @torch.jit.script 
+# def dlp_step(
+#     v: Tensor, 
+#     W: Tensor, 
+#     vb: Tensor, 
+#     hb: Tensor,
+#     beta: float, 
+#     alpha: float, 
+#     rnd_fw: Tensor, # Added for safe CUDA graph random proposals
+#     rnd_mh: Tensor, # Renamed for clarity
+#     states: Tensor, 
+#     scale: float, 
+#     shift: float, 
+#     dmala: bool
+# ) -> Tensor:
+#     # 1. Forward Proposal
+#     # local_field_v = torch.matmul(v, W) + vb
+#     arg = hb + torch.matmul(v,W)
+#     # tanh_term = torch.tanh(arg)
+#     tanh_term = torch.sigmoid(arg)
+#     local_field_v = vb + torch.matmul(tanh_term,W.T)
+#     diff_fw = states - v.unsqueeze(-1)
     
+#     q_fw = torch.log_softmax(
+#         (0.5*beta * local_field_v.unsqueeze(-1) * diff_fw) - (0.5 * diff_fw.pow(2) / alpha),
+#         dim=2
+#     )
+
+#     p_plus1 = torch.exp(q_fw[:, :, 0])
+#     # Maps True/False to {1, -1} for Ising or {1, 0} for Bernoulli
+#     vp = scale * (rnd_fw < p_plus1).float() + shift
+    
+#     if not dmala:
+#         # v.copy_(vp)
+#         return vp
+        
+#     # 2. MH Correction
+#     idx_vp = (vp == shift).long().unsqueeze(-1)
+#     log_q_fw = q_fw.gather(2, idx_vp).squeeze(-1).sum(dim=1)
+
+#     # local_field_vp = torch.matmul(vp, W) + vb
+#     argp = hb + torch.matmul(vp,W)
+#     # tanh_termp = torch.tanh(argp)
+#     tanh_termp = torch.sigmoid(argp)
+#     local_field_vp = vb + torch.matmul(tanh_termp,W.T)
+
+#     diff_bw = states - vp.unsqueeze(-1)
+    
+#     q_bw = torch.log_softmax(
+#         (0.5*beta * local_field_vp.unsqueeze(-1) * diff_bw) - (0.5 * diff_bw.pow(2) / alpha), 
+#         dim=2
+#     )
+    
+#     idx_v = (v == shift).long().unsqueeze(-1)
+#     log_q_bw = q_bw.gather(2, idx_v).squeeze(-1).sum(dim=1)
+    
+#     # energy_new = -torch.logaddexp(arg, -arg).sum(-1) - (v * vb).sum(-1)
+#     # energy_old = -torch.logaddexp(argp, -argp).sum(-1) - (vp * vb).sum(-1)
+#     energy_new = F.softplus(argp).sum(-1) + (vp * vb).sum(-1)
+#     energy_old = F.softplus(arg).sum(-1) + (v * vb).sum(-1)
+#     d_energy = energy_new - energy_old
+    
+#     log_mh_ratio = -beta*d_energy + log_q_bw - log_q_fw
+#     accept = rnd_mh.log() < log_mh_ratio
+    
+#     new_v = torch.where(accept.unsqueeze(-1), vp, v)
+#     # v.copy_(new_v)
+#     return new_v
+import torch.nn.functional as F
+@torch.jit.script
+def dlp_dmala_step(
+    v: Tensor, W: Tensor, vb: Tensor, hb: Tensor,
+    beta: float, alpha: float, rnd_fw: Tensor, rnd_mh: Tensor, 
+    states: Tensor, scale: Tensor, shift: Tensor
+) -> Tensor:
+    # 1. Forward Proposal (DLP) - Parallel coordinate updates [cite: 6, 89]
+    arg = hb + torch.matmul(v, W)
+    tanh_term = torch.sigmoid(arg)
+    local_field_v = vb + torch.matmul(tanh_term, W.T)
+    diff_fw = states - v.unsqueeze(-1) # (batch, dim, 2)
+    
+    # Eq (2) from the paper: Discrete Langevin Proposal [cite: 86]
     q_fw = torch.log_softmax(
-        (0.5*beta * local_field_v.unsqueeze(-1) * diff_fw) - (0.5 * diff_fw.pow(2) / alpha),
+        (0.5 * beta * local_field_v.unsqueeze(-1) * diff_fw) - (0.5 * diff_fw.pow(2) / alpha),
         dim=2
     )
-
     p_plus1 = torch.exp(q_fw[:, :, 0])
-    # Maps True/False to {1, -1} for Ising or {1, 0} for Bernoulli
     vp = scale * (rnd_fw < p_plus1).float() + shift
     
-    if not dmala:
-        # v.copy_(vp)
-        return vp
-        
-    # 2. MH Correction
+    # 2. MH Correction (DMALA) [cite: 97]
     idx_vp = (vp == shift).long().unsqueeze(-1)
     log_q_fw = q_fw.gather(2, idx_vp).squeeze(-1).sum(dim=1)
 
-    # local_field_vp = torch.matmul(vp, W) + vb
-    argp = hb + torch.matmul(vp,W)
-    # tanh_termp = torch.tanh(argp)
+    argp = hb + torch.matmul(vp, W)
     tanh_termp = torch.sigmoid(argp)
-    local_field_vp = vb + torch.matmul(tanh_termp,W.T)
+    local_field_vp = vb + torch.matmul(tanh_termp, W.T)
 
     diff_bw = states - vp.unsqueeze(-1)
-    
     q_bw = torch.log_softmax(
-        (0.5*beta * local_field_vp.unsqueeze(-1) * diff_bw) - (0.5 * diff_bw.pow(2) / alpha), 
+        (0.5 * beta * local_field_vp.unsqueeze(-1) * diff_bw) - (0.5 * diff_bw.pow(2) / alpha), 
         dim=2
     )
-    
     idx_v = (v == shift).long().unsqueeze(-1)
     log_q_bw = q_bw.gather(2, idx_v).squeeze(-1).sum(dim=1)
     
-    # energy_new = -torch.logaddexp(arg, -arg).sum(-1) - (v * vb).sum(-1)
-    # energy_old = -torch.logaddexp(argp, -argp).sum(-1) - (vp * vb).sum(-1)
-    energy_new = -torch.logaddexp(torch.zeros_like(argp), argp).sum(-1) - (vp * vb).sum(-1)
-    energy_old = -torch.logaddexp(torch.zeros_like(arg), arg).sum(-1) - (v * vb).sum(-1)
-    d_energy = energy_new - energy_old
+    # Energy: U(theta) = sum(Softplus) + b*theta 
+    energy_new = F.softplus(argp).sum(-1) + (vp * vb).sum(-1)
+    energy_old = F.softplus(arg).sum(-1) + (v * vb).sum(-1)
     
-    log_mh_ratio = -beta*d_energy + log_q_bw - log_q_fw
-    accept = rnd_mh.log() < log_mh_ratio
-    
-    new_v = torch.where(accept.unsqueeze(-1), vp, v)
-    # v.copy_(new_v)
-    return new_v
+    # Log MH Ratio [cite: 94]
+    log_mh_ratio = beta * (energy_new - energy_old) + log_q_bw - log_q_fw
+    return torch.where(rnd_mh.log() < log_mh_ratio.unsqueeze(-1), vp, v)
 
 class DLP(Sampler):
     def __init__(
@@ -160,46 +204,48 @@ class DLP(Sampler):
         )
 
     def _cudagraph_sample(self, v: torch.Tensor, num_steps: int):
-        # 1. Allocate Static Memory Buffers
+        device = v.device
+        
+        # 1. Localize and Prepare (Avoid class attribute inspection during capture)
+        W = self.params.weight_matrix.detach()
+        vb, hb = self.params.vbias.detach(), self.params.hbias.detach()
+        beta, alpha = float(self.beta), float(self.alpha)
+        states = self.states.detach() 
+        t_scale = torch.as_tensor(self.scale, device=device, dtype=torch.float32)
+        t_shift = torch.as_tensor(self.shift, device=device, dtype=torch.float32)
+
+        # 2. Static Buffers
         static_v = v.clone()
+        static_rnd_fw = torch.empty((v.shape[0], v.shape[1]), device=device)
+        static_rnd_mh = torch.empty((v.shape[0], 1), device=device) # Shaped for broadcast
         
-        # Shapes based on your previous 'rnds_fw' and 'rnds_mh' setup
-        static_rnd_fw = torch.empty((v.shape[0], v.shape[1]), device=v.device)
-        static_rnd_mh = torch.empty((v.shape[0],), device=v.device)
+        capture_stream = torch.cuda.Stream()
         
-        # 2. Warmup Phase
-        # We must run the operations on a side stream to prepare the memory allocators
-        s = torch.cuda.Stream()
-        s.wait_stream(torch.cuda.current_stream())
-        with torch.cuda.stream(s):
-            for _ in range(3):
-                # Fill dummy noise
+        # 3. CRITICAL Warmup: Force JIT compilation OUTSIDE the graph
+        with torch.cuda.stream(capture_stream):
+            for _ in range(5): # Extra runs to settle the allocator
                 static_rnd_fw.uniform_()
                 static_rnd_mh.uniform_()
-                # Run the step
-                static_out = self.sample_step(static_v, static_rnd_fw, static_rnd_mh)
-        torch.cuda.current_stream().wait_stream(s)
+                # Run the function completely to "burn in" the kernels
+                _ = dlp_dmala_step(static_v, W, vb, hb, beta, alpha, 
+                                   static_rnd_fw, static_rnd_mh, states, t_scale, t_shift)
+        torch.cuda.synchronize() # Wait for compilation to finish
         
-        # 3. Capture Phase
-        # Record the exact sequence of CUDA kernels
+        # 4. Capture Phase
         g = torch.cuda.CUDAGraph()
-        with torch.cuda.graph(g):
-            static_out = self.sample_step(static_v, static_rnd_fw, static_rnd_mh)
+        with torch.cuda.graph(g, stream=capture_stream):
+            # Record exactly one step into the graph
+            static_out = dlp_dmala_step(static_v, W, vb, hb, beta, alpha, 
+                                        static_rnd_fw, static_rnd_mh, states, t_scale, t_shift)
             
-        # 4. Replay Phase (The Loop)
+        # 5. Replay Phase (The High-Speed Loop)
         for _ in range(num_steps):
-            # HUGE OPTIMIZATION: Generate noise directly IN-PLACE into the static buffers.
-            # This avoids allocating a massive (num_steps, ...) tensor upfront.
             static_rnd_fw.uniform_()
             static_rnd_mh.uniform_()
-            
-            # Execute the captured graph (microseconds)
             g.replay()
-            
-            # Feed the output back into the input buffer for the next iteration
+            # Feed result back into the input buffer for the next MCMC step
             static_v.copy_(static_out)
             
-        # Write the final state back to the class dictionary
         self.chains['visible'] = static_v.clone()
 
     @torch.compiler.disable
