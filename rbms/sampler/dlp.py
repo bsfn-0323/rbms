@@ -219,7 +219,7 @@ class DLP(Sampler):
         t_half_inv_alpha = torch.tensor(0.5 / self.alpha, device=device, dtype=torch.float32)
         
         # Force states to the correct device (in case initialized on CPU)
-        states = self.states.detach().to(device) 
+        states = self.states.detach().to(device).detach()
         t_scale = torch.as_tensor(self.scale, device=device, dtype=torch.float32)
         t_shift = torch.as_tensor(self.shift, device=device, dtype=torch.float32)
 

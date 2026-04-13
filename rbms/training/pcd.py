@@ -3,6 +3,7 @@ import time
 import numpy as np
 import torch
 from torch.optim import Optimizer
+from rbms.optim import SR_CG
 from tqdm.autonotebook import tqdm
 
 from rbms.classes import EBM, Sampler
@@ -29,6 +30,7 @@ def train(
     num_updates: int,
     filename: str,
     variational:bool,
+    eta:float = 0.0,
 ):
     pbar = tqdm(
         initial=curr_update,
@@ -40,6 +42,13 @@ def train(
     pbar.set_description(f"Training {params.name}")
 
     start = time.perf_counter()
+    initial_loss = None # Define this to capture the first real loss
+    ema_loss = None     # Initialize as None to set on first iteration
+    alpha=0.1
+    ema_losses = []
+    skip_idx = 0
+    drop = 1.0
+    running_min = float('inf')
 
     for idx in range(curr_update + 1, num_updates + 1):
         
@@ -50,13 +59,38 @@ def train(
             j1,j2 = train_dataset.J1,train_dataset.J2
             parallel_chains= sampler.get_conf_grad(batch=None) 
             # loss,deltaE = params.compute_var_gradient(
+            
             loss = params.compute_var_gradient(    
                 J1=j1,
                 J2=j2,
                 chains=parallel_chains,
+                eta=eta
             )
+            if ema_loss is None:
+                ema_loss = loss
+                initial_loss = loss # Capture the starting plateau level
+
+            ema_loss = alpha * loss + (1 - alpha) * ema_loss
+            # 1. Detect the massive drop (compare to previous EMA before updating or use a threshold)
+            # if skip_idx == 0 and np.abs(initial_loss - ema_loss)/initial_loss >0.9 : # Example: dropped by 50%
+            #     skip_idx = idx
+            #     print(f"Drop detected at: {idx}")
+
+            # if skip_idx > 0:
+            #     # 2. Update running minimum after the drop
+            #     if ema_loss < running_min:
+            #         running_min = ema_loss
+                
+            #     # 3. Detect overshoot (20% rise above the minimum reached after drop)
+            #     if np.abs(ema_loss - running_min) / running_min > 0.5 and drop > 0.99999:
+            #         drop = 0.9999
+            #         print(f"Overshoot detected! Setting eta to zero at: {idx}")
+            # eta = eta*drop
+            ema_losses.append(ema_loss)
+
         else:
             # deltaE=None #Not needed in standard training
+            loss=None
             batch = train_dataset.batch(batch_size)             
             data, weights = batch["data"], batch["weights"]     
             
@@ -80,7 +114,10 @@ def train(
         sampler.pre_grad_update()
 
         for opt in optimizer:
-            opt.step()
+            if isinstance(opt, SR_CG):
+                opt.step(v_chain=parallel_chains["visible"], model=params)
+            else:
+                opt.step()
 
         params.post_grad_update()
         sampler.post_grad_update(params=params)
@@ -126,6 +163,7 @@ def train(
                 time=curr_time + elapsed_time,
                 learning_rate=learning_rate,
                 flags=flags,
+                loss=loss,
             )
 
             save_sampler(filename, sampler, idx)

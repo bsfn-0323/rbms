@@ -56,6 +56,7 @@ def main(args, map_model=map_model):
         J1 = J1/temp
         J2 = J2/temp
         num_visibles = args["num_visibles"]
+        print(f"Temp = {args['vartemp']:.3f}")
         train_dataset = VarRBMDataset(
             J1=J1,
             J2=J2,
@@ -193,7 +194,8 @@ def main(args, map_model=map_model):
         checkpoints=checkpoints,
         num_updates=args["num_updates"],
         filename=args["filename"],
-        variational=args["variational"]
+        variational=args["variational"],
+        eta=args["entropy_weight"]
     )
 
 

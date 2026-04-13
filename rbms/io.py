@@ -17,6 +17,7 @@ def save_model(
     time: float,
     learning_rate: Tensor,
     flags: list[str] = [],
+    loss: float = None,
 ) -> None:
     """Save the current state of the model.
 
@@ -49,6 +50,8 @@ def save_model(
         checkpoint["numpy_rng_arg4"] = np.random.get_state()[4]
         checkpoint["time"] = time
         checkpoint["learning_rate"] = learning_rate.cpu().numpy()
+        if loss is not None:
+            checkpoint["loss"] = loss
         # Update the parallel chains to resume training
         if "parallel_chains" in f.keys():
             f["parallel_chains"][...] = chains["visible"].cpu().numpy()

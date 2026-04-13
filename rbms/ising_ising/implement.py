@@ -118,6 +118,7 @@ def _compute_var_gradient(
     vbias: Tensor,
     hbias: Tensor,
     weight_matrix: Tensor,
+    eta: float,
 ) -> float:
     
     B = v_chain.size(0)
@@ -152,7 +153,7 @@ def _compute_var_gradient(
     # 5. DYNAMIC GAMMA CALCULATION
     norm_grad = grad_weight_matrix.norm()
     norm_grad_ent = entropy_weight_matrix.norm()
-    target_percentage = 0.2
+    target_percentage = eta
     
     # Added 1e-8 epsilon to prevent division by zero in the first step
     loss = 0.5 * (deltaE_c**2).mean()
@@ -161,7 +162,7 @@ def _compute_var_gradient(
 
     
     # 6. ATTACH GRADIENTS
-    weight_matrix.grad = grad_weight_matrix + gamma * entropy_weight_matrix
+    weight_matrix.grad = grad_weight_matrix + eta * entropy_weight_matrix
     vbias.grad = grad_vbias + gamma * entropy_vbias
     hbias.grad = grad_hbias + gamma * entropy_hbias
     

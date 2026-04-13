@@ -123,7 +123,7 @@ class IIRBM(RBM):
             centered=centered,
         )
 
-    def compute_var_gradient(self, J1,J2, chains):
+    def compute_var_gradient(self, J1,J2, chains,eta):
         return _compute_var_gradient(
             J1 = J1,
             J2 = J2,
@@ -133,6 +133,7 @@ class IIRBM(RBM):
             vbias=self.vbias,
             hbias=self.hbias,
             weight_matrix=self.weight_matrix,
+            eta=eta,
         )
 
     def independent_model(self):

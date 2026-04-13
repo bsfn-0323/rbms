@@ -146,6 +146,7 @@ def compute_var_gradient(
     J2: Tensor,
     chains: dict[str, Tensor],
     params: IIRBM,
+    eta: float = 0.0,
 ) -> tuple[float,float]:
     """Compute the gradient for each of the parameters and attach it.
 
@@ -154,6 +155,7 @@ def compute_var_gradient(
         J2 (Tensor): Two-body interaction term.
         chains (dict[str, Tensor]): The parallel chains used for gradient computation.
         params (IIRBM): The parameters of the RBM.
+        eta (float): Weight of the entropic term.
     """
     loss,deltaE = _compute_var_gradient(
         J1=J1,

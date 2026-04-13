@@ -106,6 +106,13 @@ def add_args_init_rbm(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         default=1.0,
         help="(Defaults to 1.0). Temperature of the target model in variational training."
     )
+    rbm_args.add_argument(
+        "--entropy_weight",
+        type=float,
+        default=0.0,
+        help="(Defaults to 0.0). Weight of the RBM entropy term in variational training."
+
+    )
     return parser
 
 

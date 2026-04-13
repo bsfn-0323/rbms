@@ -42,6 +42,7 @@ def _init_training(
     device: torch.device | str,
     flags: list[str],
     map_model: dict[str, type[EBM]] = map_model,
+    loss: float = None,
 ):
     if model_type is None:
         match train_dataset.variable_type:
@@ -91,6 +92,7 @@ def _init_training(
         time=0.0,
         flags=flags,
         learning_rate=lr,
+        loss = loss
     )
 
     with h5py.File(filename, "a") as f:

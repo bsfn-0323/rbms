@@ -70,5 +70,5 @@ def build_pre_grad_update(
             *[NormalizeGrad(optimizer=optimizer)] * normalize_grad,
             *[ClipGradNorm(optimizer=optimizer, max_grad_norm=max_grad_norm)]
             * (max_grad_norm > 0),
-        )
+        ), disable=True
     )
