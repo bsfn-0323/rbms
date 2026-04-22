@@ -13,6 +13,7 @@ from rbms.ising_gaussian.implement import (
     _compute_energy_hiddens,
     _compute_energy_visibles,
     _compute_gradient,
+    _compute_var_gradient,
     _init_chains,
     _init_parameters,
     _sample_hiddens,
@@ -128,8 +129,19 @@ class IGRBM(RBM):
             centered=centered,
         )
         
-    def compute_var_gradient(self, *args, **kwargs):
-        raise NotImplementedError(f"Variational training not yet implemented for {self.name}")
+    def compute_var_gradient(self, J1,J2, chains,eta):
+        return _compute_var_gradient(
+            J1 = J1,
+            J2 = J2,
+            v_chain=chains["visible"],
+            h_chain=chains["hidden_mag"],
+            w_chain=chains["weights"],
+            vbias=self.vbias,
+            hbias=self.hbias,
+            weight_matrix=self.weight_matrix,
+            eta=eta,
+            const=self.const,
+        )
 
     def independent_model(self):
         return IGRBM(
