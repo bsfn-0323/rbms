@@ -6,74 +6,76 @@ from torch import Tensor
 
 from rbms.classes import EBM, Sampler
 import torch.nn.functional as F
-# @torch.jit.script 
-# def dlp_step(
-#     v: Tensor, 
-#     W: Tensor, 
-#     vb: Tensor, 
-#     hb: Tensor,
-#     beta: float, 
-#     alpha: float, 
-#     rnd_fw: Tensor, # Added for safe CUDA graph random proposals
-#     rnd_mh: Tensor, # Renamed for clarity
-#     states: Tensor, 
-#     scale: float, 
-#     shift: float, 
-#     dmala: bool
-# ) -> Tensor:
-#     # 1. Forward Proposal
-#     # local_field_v = torch.matmul(v, W) + vb
-#     arg = hb + torch.matmul(v,W)
-#     # tanh_term = torch.tanh(arg)
-#     tanh_term = torch.sigmoid(arg)
-#     local_field_v = vb + torch.matmul(tanh_term,W.T)
-#     diff_fw = states - v.unsqueeze(-1)
+@torch.jit.script 
+def dlp_step(
+    v: Tensor, 
+    W: Tensor, 
+    vb: Tensor, 
+    hb: Tensor,
+    beta: float, 
+    alpha: float, 
+    rnd_fw: Tensor, # Added for safe CUDA graph random proposals
+    rnd_mh: Tensor, # Renamed for clarity
+    states: Tensor, 
+    scale: float, 
+    shift: float, 
+    dmala: bool
+) -> Tensor:
+    # 1. Forward Proposal
+    # local_field_v = torch.matmul(v, W) + vb
+    arg = hb + torch.matmul(v,W)
+    # tanh_term = torch.tanh(arg)
+    tanh_term = torch.sigmoid(arg)
+    local_field_v = vb + torch.matmul(tanh_term,W.T)
+    diff_fw = states - v.unsqueeze(-1)
     
-#     q_fw = torch.log_softmax(
-#         (0.5*beta * local_field_v.unsqueeze(-1) * diff_fw) - (0.5 * diff_fw.pow(2) / alpha),
-#         dim=2
-#     )
+    q_fw = torch.log_softmax(
+        (0.5*beta * local_field_v.unsqueeze(-1) * diff_fw) - (0.5 * diff_fw.pow(2) / alpha),
+        dim=2
+    )
 
-#     p_plus1 = torch.exp(q_fw[:, :, 0])
-#     # Maps True/False to {1, -1} for Ising or {1, 0} for Bernoulli
-#     vp = scale * (rnd_fw < p_plus1).float() + shift
+    p_plus1 = torch.exp(q_fw[:, :, 0])
+    # Maps True/False to {1, -1} for Ising or {1, 0} for Bernoulli
+    vp = scale * (rnd_fw < p_plus1).float() + shift
     
-#     if not dmala:
-#         # v.copy_(vp)
-#         return vp
+    if not dmala:
+        # v.copy_(vp)
+        return vp
         
-#     # 2. MH Correction
-#     idx_vp = (vp == shift).long().unsqueeze(-1)
-#     log_q_fw = q_fw.gather(2, idx_vp).squeeze(-1).sum(dim=1)
+    # 2. MH Correction
+    idx_vp = (vp == shift).long().unsqueeze(-1)
+    log_q_fw = q_fw.gather(2, idx_vp).squeeze(-1).sum(dim=1)
 
-#     # local_field_vp = torch.matmul(vp, W) + vb
-#     argp = hb + torch.matmul(vp,W)
-#     # tanh_termp = torch.tanh(argp)
-#     tanh_termp = torch.sigmoid(argp)
-#     local_field_vp = vb + torch.matmul(tanh_termp,W.T)
+    # local_field_vp = torch.matmul(vp, W) + vb
+    argp = hb + torch.matmul(vp,W)
+    # tanh_termp = torch.tanh(argp)
+    tanh_termp = torch.sigmoid(argp)
+    local_field_vp = vb + torch.matmul(tanh_termp,W.T)
 
-#     diff_bw = states - vp.unsqueeze(-1)
+    diff_bw = states - vp.unsqueeze(-1)
     
-#     q_bw = torch.log_softmax(
-#         (0.5*beta * local_field_vp.unsqueeze(-1) * diff_bw) - (0.5 * diff_bw.pow(2) / alpha), 
-#         dim=2
-#     )
+    q_bw = torch.log_softmax(
+        (0.5*beta * local_field_vp.unsqueeze(-1) * diff_bw) - (0.5 * diff_bw.pow(2) / alpha), 
+        dim=2
+    )
     
-#     idx_v = (v == shift).long().unsqueeze(-1)
-#     log_q_bw = q_bw.gather(2, idx_v).squeeze(-1).sum(dim=1)
+    idx_v = (v == shift).long().unsqueeze(-1)
+    log_q_bw = q_bw.gather(2, idx_v).squeeze(-1).sum(dim=1)
     
-#     # energy_new = -torch.logaddexp(arg, -arg).sum(-1) - (v * vb).sum(-1)
-#     # energy_old = -torch.logaddexp(argp, -argp).sum(-1) - (vp * vb).sum(-1)
-#     energy_new = F.softplus(argp).sum(-1) + (vp * vb).sum(-1)
-#     energy_old = F.softplus(arg).sum(-1) + (v * vb).sum(-1)
-#     d_energy = energy_new - energy_old
+    # energy_new = -torch.logaddexp(arg, -arg).sum(-1) - (v * vb).sum(-1)
+    # energy_old = -torch.logaddexp(argp, -argp).sum(-1) - (vp * vb).sum(-1)
+    energy_new = F.softplus(argp).sum(-1) + (vp * vb).sum(-1)
+    energy_old = F.softplus(arg).sum(-1) + (v * vb).sum(-1)
+    d_energy = energy_new - energy_old
     
-#     log_mh_ratio = -beta*d_energy + log_q_bw - log_q_fw
-#     accept = rnd_mh.log() < log_mh_ratio
-    
-#     new_v = torch.where(accept.unsqueeze(-1), vp, v)
-#     # v.copy_(new_v)
-#     return new_v
+    log_mh_ratio = beta*d_energy + log_q_bw - log_q_fw
+
+    # print(torch.clip(log_mh_ratio.exp(),0,1).mean())
+    accept = rnd_mh.log() < log_mh_ratio
+    new_v = torch.where(accept.unsqueeze(-1), vp, v)
+    # v.copy_(new_v)
+    return new_v
+
 import torch.nn.functional as F
 # @torch.jit.script
 def dlp_dmala_step(
@@ -166,11 +168,6 @@ class DLP(Sampler):
         self.sample(num_steps=None)
         return self.chains
 
-    # def sample(self, num_steps: int | None, **kwargs):
-    #     v = self.chains['visible']
-    #     rnds = torch.randn((v.shape[0],num_steps),device = params.device)
-    #     for i in range(num_steps):
-    #         v = self.sample_step(v,rnds[:,i])
     @torch.no_grad()
     def sample(self, num_steps: int | None = None, use_cudagraph: bool = False, **kwargs):
         if num_steps is None:

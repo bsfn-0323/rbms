@@ -52,8 +52,8 @@ class SGD_cossim(SGD):
         return super().step(closure)
 
 class SR_CG(Optimizer):
-    def __init__(self, params, lr=0.001, cg_steps=10, reg=1e-4, update_freq=1, warm_start=True, maximize=True):
-        defaults = dict(lr=lr, cg_steps=cg_steps, reg=reg, update_freq=update_freq, warm_start=warm_start, maximize=maximize, step=0)
+    def __init__(self, params, lr=0.001, cg_steps=5, init_reg=1e-3, update_freq=1, warm_start=True, maximize=True):
+        defaults = dict(lr=lr, cg_steps=cg_steps, reg=init_reg, update_freq=update_freq, warm_start=warm_start, maximize=maximize, step=0)
         super().__init__(params, defaults)
         
         # Initialize state memory for warm starts
@@ -93,12 +93,12 @@ class SR_CG(Optimizer):
         return Sx_list
 
     @torch.no_grad()
-    def step(self, v_chain, model, closure=None):
+    def step(self, v_chain, model,scale=1, closure=None):
         for group in self.param_groups:
             group["step"] += 1
             params = group["params"]
             lr = group["lr"]
-            reg = group["reg"]
+            reg = np.minimum(scale*group["reg"],500.0)
             
             g = [p.grad.clone() for p in params]
             
