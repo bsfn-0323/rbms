@@ -99,14 +99,15 @@ class SR_CG(Optimizer):
             params = group["params"]
             lr = group["lr"]
             reg = np.minimum(scale*group["reg"],500.0)
-            
+            M=float(model.weight_matrix.shape[0])
             g = [p.grad.clone() for p in params]
             
             # Lazy Preconditioning: Only run CG every 'update_freq' steps
             if group["step"] % group["update_freq"] == 0 or group["step"] == 1:
                 
                 local_field = model.hbias + v_chain @ model.weight_matrix
-                tanh_term = torch.tanh(local_field)
+                # tanh_term = torch.tanh(local_field)
+                tanh_term = local_field/M
                 
                 if group["warm_start"] and group["step"] > 1:
                     # Warm Start: Initialize with previous Natural Gradient

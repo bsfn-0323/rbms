@@ -9,7 +9,8 @@ from rbms.custom_fn import log2cosh
 def _sample_hiddens(
     v: Tensor, weight_matrix: Tensor, hbias: Tensor, beta: float = 1.0
 ) -> Tuple[Tensor, Tensor]:
-    mh = hbias + (v @ weight_matrix)
+    # mh = hbias + (v @ weight_matrix)
+    mh = (hbias + (v @ weight_matrix)) / weight_matrix.shape[0]
     h = (
         torch.randn_like(mh) / torch.sqrt(torch.ones_like(mh) * weight_matrix.shape[0])
         + mh
@@ -225,7 +226,7 @@ def _init_parameters(
     data: Tensor,
     device: torch.device,
     dtype: torch.dtype,
-    var_init: float = 1e-6,
+    var_init: float = 1e-8,
 ):
     _, num_visibles = data.shape
     weight_matrix = (
