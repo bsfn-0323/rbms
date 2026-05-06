@@ -151,8 +151,6 @@ class SR_CG(Optimizer):
                 
                 # Save the Natural Gradient for the next warm start
                 for p_tensor, dt in zip(params, delta_theta):
-                    #only if it is the weight_matrix
-                    if p_tensor is model.weight_matrix:
                         self.state[p_tensor]['last_dt'].copy_(dt)
             else:
                 # Fallback: Standard Gradient Update for intermediate steps
@@ -161,7 +159,9 @@ class SR_CG(Optimizer):
             # Apply the update
             direction = 1 if group["maximize"] else -1
             for p_tensor, dt in zip(params, delta_theta):
-                p_tensor.add_(dt, alpha=direction * lr)
+                #only if it is the weight_matrix
+                if p_tensor is model.weight_matrix:
+                    p_tensor.add_(dt, alpha=direction * lr)
 
 def setup_optim(optim: str, args: dict, params: EBM) -> list[Optimizer]:
     match args["optim"]:
