@@ -113,6 +113,13 @@ def add_args_init_rbm(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         help="(Defaults to 0.0). Weight of the RBM entropy term in variational training."
 
     )
+    rbm_args.add_argument(
+        "--var_init",
+        type=float,
+        default=1e-05,
+        help="(Defaults to 1e-05). Initial weight variance."
+
+    )
     return parser
 
 

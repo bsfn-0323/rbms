@@ -115,7 +115,7 @@ def train(
 
         for opt in optimizer:
             if isinstance(opt, SR_CG):
-                scale = 1
+                scale = 1e-08
                 opt.step(v_chain=parallel_chains["visible"], model=params,scale = scale)
             else:
                 opt.step()

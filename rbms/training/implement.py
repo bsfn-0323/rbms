@@ -43,6 +43,7 @@ def _init_training(
     flags: list[str],
     map_model: dict[str, type[EBM]] = map_model,
     loss: float = None,
+    var_init:float = 1e-05,
 ):
     if model_type is None:
         match train_dataset.variable_type:
@@ -65,6 +66,7 @@ def _init_training(
         dataset=train_dataset,
         device=device,
         dtype=dtype,
+        var_init=var_init
     )
 
     # Permanent chains

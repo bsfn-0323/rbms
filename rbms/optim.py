@@ -52,7 +52,7 @@ class SGD_cossim(SGD):
         return super().step(closure)
 
 class SR_CG(Optimizer):
-    def __init__(self, params, lr=0.001, cg_steps=5, init_reg=1e-3, update_freq=1, warm_start=True, maximize=True):
+    def __init__(self, params, lr=0.001, cg_steps=10, init_reg=1, update_freq=1, warm_start=True, maximize=True):
         defaults = dict(lr=lr, cg_steps=cg_steps, reg=init_reg, update_freq=update_freq, warm_start=warm_start, maximize=maximize, step=0)
         super().__init__(params, defaults)
         
@@ -151,7 +151,9 @@ class SR_CG(Optimizer):
                 
                 # Save the Natural Gradient for the next warm start
                 for p_tensor, dt in zip(params, delta_theta):
-                    self.state[p_tensor]['last_dt'].copy_(dt)
+                    #only if it is the weight_matrix
+                    if p_tensor is model.weight_matrix:
+                        self.state[p_tensor]['last_dt'].copy_(dt)
             else:
                 # Fallback: Standard Gradient Update for intermediate steps
                 delta_theta = g

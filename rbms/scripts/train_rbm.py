@@ -114,6 +114,7 @@ def main(args, map_model=map_model):
             device=args["device"],
             flags=flags,
             map_model=map_model,
+            var_init=args["var_init"],
         )
         args["update"] = 1
 
