@@ -3,7 +3,7 @@ import time
 import numpy as np
 import torch
 from torch.optim import Optimizer
-from rbms.optim import SR_CG
+from rbms.optim import NGD
 from tqdm.autonotebook import tqdm
 
 from rbms.classes import EBM, Sampler
@@ -114,9 +114,8 @@ def train(
         sampler.pre_grad_update()
 
         for opt in optimizer:
-            if isinstance(opt, SR_CG):
-                scale = 1e-08
-                opt.step(v_chain=parallel_chains["visible"], model=params,scale = scale)
+            if isinstance(opt, NGD):
+                opt.step(v_chain=parallel_chains["visible"], model=params,scale =1)
             else:
                 opt.step()
 
@@ -149,8 +148,8 @@ def train(
             pbar.write("learning rate :")
             for i in range(len(optimizer)):
                 pbar.write(f"    - {names_params[i]} : {learning_rates[i]:.6f}")
-            # pbar.write(f"scale : {scale:.3f}")
-
+            # pbar.write(f"scale : {opt.reg:.3g}")
+            # pbar.write(f"cg steps: {opt.cg_step}")
 
             if variational:
                 pbar.write("loss : ")

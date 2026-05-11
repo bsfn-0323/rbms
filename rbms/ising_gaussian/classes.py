@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import torch
@@ -18,6 +18,7 @@ from rbms.ising_gaussian.implement import (
     _init_parameters,
     _sample_hiddens,
     _sample_visibles,
+    _compute_energy_visibles_gradient
 )
 
 
@@ -114,7 +115,13 @@ class IGRBM(RBM):
             weight_matrix=self.weight_matrix,
             const=self.const,
         )
-
+    def compute_energy_visible_gradient(self, v: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+        return _compute_energy_visibles_gradient(
+            v=v,
+            vbias=self.vbias,
+            hbias=self.hbias,
+            weight_matrix=self.weight_matrix,
+        )  
     def compute_gradient(self, data, chains, centered=True):
         _compute_gradient(
             v_data=data["visible"],

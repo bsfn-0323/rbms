@@ -14,6 +14,7 @@ from rbms.ising_ising.implement import (
     _init_parameters,
     _sample_hiddens,
     _sample_visibles,
+    _compute_energy_visibles_gradient
 )
 
 
@@ -111,6 +112,22 @@ def compute_energy_hiddens(h: Tensor, params: IIRBM) -> Tensor:
         h=h, vbias=params.vbias, hbias=params.hbias, weight_matrix=params.weight_matrix
     )
 
+def compute_energy_visible_gradient(v: Tensor, params: IIRBM) -> tuple[Tensor, Tensor, Tensor]:
+    """Compute the gradient of the energy with respect to the parameters on the visible configurations.
+
+    Args:
+        v (Tensor): Visible configurations.
+        params (IIRBM): Parameters of the RBM.
+
+    Returns:
+        Tuple[Tensor, Tensor, Tensor]: The gradients with respect to vbias, hbias and weight_matrix.
+    """
+    return _compute_energy_visibles_gradient(
+        v=v,
+        vbias=params.vbias,
+        hbias=params.hbias,
+        weight_matrix=params.weight_matrix,
+    )
 
 def compute_gradient(
     data: dict[str, Tensor],

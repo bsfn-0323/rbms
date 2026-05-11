@@ -63,7 +63,16 @@ def _compute_energy_hiddens(
     quad = 0.5 * float(weight_matrix.shape[0]) * (h * h).sum(1)
     return -field - log_term.sum(1) + quad
 
+def _compute_energy_visibles_gradient(
+    v: Tensor, vbias: Tensor, hbias: Tensor, weight_matrix: Tensor
+) -> Tuple[Tensor, Tensor, Tensor]:
+    grad_vbias = -v
+    grad_hbias = -(hbias + (v @ weight_matrix)) / float(weight_matrix.shape[0])
+    # grad_weight_matrix = -(v.T @ grad_hbias) 
+    grad_weight_matrix = None
 
+    return grad_vbias, grad_hbias, grad_weight_matrix
+    
 def _compute_var_gradient(
     J1:  Tensor,
     J2:  Tensor,

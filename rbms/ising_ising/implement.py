@@ -1,6 +1,6 @@
 import torch
 from torch import Tensor
-
+from typing import Tuple
 from rbms.custom_fn import log2cosh
 
 
@@ -47,6 +47,17 @@ def _compute_energy_visibles(
     log_term = log2cosh(exponent)
     return -field - log_term.sum(1)
 
+def _compute_energy_visibles_gradient(
+    v: Tensor, vbias: Tensor, hbias: Tensor, weight_matrix: Tensor
+) -> Tuple[Tensor, Tensor, Tensor]:
+    local_field = hbias + (v @ weight_matrix)
+    tanh_term = torch.tanh(local_field)
+    
+    grad_vbias = -v
+    grad_hbias = -tanh_term
+    # grad_weight_matrix = -v.T @ tanh_term
+    grad_weight_matrix = None
+    return grad_vbias, grad_hbias, grad_weight_matrix
 
 def _compute_energy_hiddens(
     h: Tensor, vbias: Tensor, hbias: Tensor, weight_matrix: Tensor

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -15,6 +15,7 @@ from rbms.ising_gaussian.implement import (
     _init_parameters,
     _sample_hiddens,
     _sample_visibles,
+    _compute_energy_visibles_gradient
 )
 from rbms.dataset.dataset_class import RBMDataset
 
@@ -71,6 +72,13 @@ def compute_energy_hiddens(h: Tensor, params: IGRBM) -> Tensor:
         weight_matrix=params.weight_matrix,
     )
 
+def compute_energy_visible_gradient(v: Tensor, params: IGRBM) -> Tuple[Tensor, Tensor, Tensor]:
+    return _compute_energy_visibles_gradient(
+        v=v,
+        vbias=params.vbias,
+        hbias=params.hbias,
+        weight_matrix=params.weight_matrix,
+    )
 
 def compute_gradient(
     data: dict[str, Tensor],

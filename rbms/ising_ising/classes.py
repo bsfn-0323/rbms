@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 from torch import Tensor
-
+from typing import Tuple
 from rbms.classes import RBM
 from rbms.custom_fn import check_keys_dict, log2cosh
 from rbms.ising_ising.implement import (
@@ -16,6 +16,7 @@ from rbms.ising_ising.implement import (
     _init_parameters,
     _sample_hiddens,
     _sample_visibles,
+    _compute_energy_visibles_gradient
 )
 
 
@@ -109,6 +110,14 @@ class IIRBM(RBM):
             weight_matrix=self.weight_matrix,
         )
 
+    def compute_energy_visible_gradient(self, v: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+        return _compute_energy_visibles_gradient(
+            v=v,
+            vbias=self.vbias,
+            hbias=self.hbias,
+            weight_matrix=self.weight_matrix,
+        )
+    
     def compute_gradient(self, data, chains, centered=True):
         _compute_gradient(
             v_data=data["visible"],

@@ -196,7 +196,7 @@ def main(args, map_model=map_model):
         num_updates=args["num_updates"],
         filename=args["filename"],
         variational=args["variational"],
-        eta=args["entropy_weight"]
+        eta=args["var_init"]
     )
 
 
