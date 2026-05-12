@@ -9,4 +9,5 @@ from rbms.potts_bernoulli.functional import (
     init_parameters,
     sample_hiddens,
     sample_visibles,
+    compute_energy_visibles_gradient,
 )

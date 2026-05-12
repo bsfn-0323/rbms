@@ -42,14 +42,14 @@ def train(
     pbar.set_description(f"Training {params.name}")
 
     start = time.perf_counter()
-    initial_loss = None # Define this to capture the first real loss
+    # initial_loss = None # Define this to capture the first real loss
     ema_loss = None     # Initialize as None to set on first iteration
     alpha=0.1
     ema_losses = []
-    skip_idx = 0
-    drop = 1.0
-    running_min = float('inf')
-
+    # skip_idx = 0
+    # drop = 1.0
+    # running_min = float('inf')
+    
     for idx in range(curr_update + 1, num_updates + 1):
         
         for opt in optimizer:

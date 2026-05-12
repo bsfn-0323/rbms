@@ -18,6 +18,8 @@ from rbms.potts_bernoulli.implement import (
     _sample_hiddens,
     _sample_visibles,
     _zero_sum_gauge,
+    _compute_var_gradient,
+    _compute_energy_visibles_gradient,
 )
 
 
@@ -126,9 +128,26 @@ class PBRBM(RBM):
             centered=centered,
         )
 
-    def compute_var_gradient(self, *args, **kwargs):
-        raise NotImplementedError(f"Variational training not yet implemented for {self.name}")
-
+    def compute_var_gradient(self, J1, J2, chains, eta):
+        return _compute_var_gradient(
+            J1=J1,
+            J2=J2,
+            v_chain=chains["visible"],
+            h_chain=chains["hidden_mag"],
+            w_chain=chains["weights"],
+            vbias=self.vbias,
+            hbias=self.hbias,
+            weight_matrix=self.weight_matrix,
+            eta=eta,
+        )
+    
+    def compute_energy_visible_gradient(self, v):
+        return _compute_energy_visibles_gradient(
+            v=v,
+            vbias=self.vbias,
+            hbias=self.hbias,
+            weight_matrix=self.weight_matrix,
+        )
     def independent_model(self):
         return PBRBM(
             weight_matrix=torch.zeros_like(self.weight_matrix),
@@ -167,6 +186,7 @@ class PBRBM(RBM):
             device=device,
             dtype=dtype,
             var_init=var_init,
+            num_states=dataset.num_states,
         )
         params = PBRBM(weight_matrix=weight_matrix, vbias=vbias, hbias=hbias)
         params.set_zero_sum_gauge()

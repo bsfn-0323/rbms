@@ -1,7 +1,7 @@
 import torch
 from torch import Tensor
 from torch.nn.functional import softmax
-
+from typing import Tuple
 from rbms.custom_fn import one_hot
 
 
@@ -165,6 +165,116 @@ def _compute_gradient(
     vbias.grad = grad_vbias
     hbias.grad = grad_hbias
 
+def _compute_hamiltonian(v_oh: Tensor, J1: Tensor, J2: Tensor) -> Tensor:
+    """
+    v_oh: (B, N_v, N_s)
+    J1: (N_v, N_s)
+    J2: (N_v, N_v)
+    """
+    # field = (v_oh * J1).sum(dim=(1, 2))
+    
+    # v_oh @ v_oh.T gives a (B, N_v, N_v) matrix where entry (i,j) is 1 if they share a color
+    color_matches = torch.bmm(v_oh, v_oh.transpose(1, 2))
+    interaction = (color_matches * J2).sum(dim=(1, 2))
+    
+    return - 0.5 * interaction
+
+def _compute_var_gradient(
+    J1: Tensor,
+    J2: Tensor,
+    v_chain: Tensor,
+    h_chain: Tensor,
+    w_chain: Tensor,
+    vbias: Tensor,
+    hbias: Tensor,
+    weight_matrix: Tensor,
+    eta: float,
+) -> float:
+    B = v_chain.size(0)
+    dtype = weight_matrix.dtype
+    num_visibles, num_states, num_hiddens = weight_matrix.shape
+    
+    # 3D one-hot for the Potts Hamiltonian: (B, N_v, N_s)
+    v_oh_3d = one_hot(v_chain.to(torch.int32), num_classes=num_states, dtype=dtype)
+    
+    # Flat one-hot for the RBM linear algebra: (B, N_v * N_s)
+    v_oh = v_oh_3d.view(-1, num_visibles * num_states)
+    weight_matrix_oh = weight_matrix.view(num_visibles * num_states, num_hiddens)
+    
+    # 1. Compute energies and local fields
+    betaH = _compute_hamiltonian(v_oh_3d, J1, J2)
+    local_field = hbias + (v_oh @ weight_matrix_oh)
+
+    sigmoid_term = torch.sigmoid(local_field)
+    
+    # F uses the existing function (which internally one-hots v_chain)
+    F = _compute_energy_visibles(v_chain, vbias, hbias, weight_matrix)
+    deltaE = -betaH + F
+    
+    # 2. THE CENTERING TRICK
+    deltaE_c = (deltaE - deltaE.mean()).view(-1, 1)  # Shape: (B, 1)
+    # F_c = (F - F.mean()).view(-1, 1)                 # Shape: (B, 1)
+    
+    # 3. OPTIMIZED WEIGHT GRADIENTS
+    # v_oh.T is (N_v * N_s, B). sigmoid_term * deltaE_c is (B, N_h).
+    grad_weight_matrix_oh = (v_oh.T @ (sigmoid_term * deltaE_c)) / B
+    # entropy_weight_matrix_oh = (v_oh.T @ (sigmoid_term * F_c)) / B
+    
+    # Reshape back to (N_v, N_s, N_h)
+    grad_weight_matrix = grad_weight_matrix_oh.view(num_visibles, num_states, num_hiddens)
+    # entropy_weight_matrix = entropy_weight_matrix_oh.view(num_visibles, num_states, num_hiddens)
+    
+    # 4. OPTIMIZED BIAS GRADIENTS
+    grad_hbias = (sigmoid_term * deltaE_c).mean(dim=0)
+    # entropy_hbias = (sigmoid_term * F_c).mean(dim=0)
+
+    grad_vbias_oh = (v_oh * deltaE_c).mean(dim=0)
+    # entropy_vbias_oh = (v_oh * F_c).mean(dim=0)
+    
+    # Reshape vbias gradients to (N_v, N_s)
+    grad_vbias = grad_vbias_oh.view(num_visibles, num_states)
+    # entropy_vbias = entropy_vbias_oh.view(num_visibles, num_states)
+    
+    # 5. DYNAMIC GAMMA CALCULATION
+    # norm_grad = grad_weight_matrix.norm()
+    # norm_grad_ent = entropy_weight_matrix.norm()
+    # target_percentage = eta
+    
+    loss = 0.5 * (deltaE_c**2).mean()
+    # gamma = (norm_grad * target_percentage) / (norm_grad_ent + 1e-8)
+    
+    # 6. ATTACH GRADIENTS
+    weight_matrix.grad = grad_weight_matrix
+    vbias.grad = grad_vbias
+    hbias.grad = grad_hbias 
+    
+    return loss.item()
+
+def _compute_energy_visibles_gradient(
+    v: Tensor, vbias: Tensor, hbias: Tensor, weight_matrix: Tensor
+) -> Tuple[Tensor, Tensor, Tensor]:
+    dtype = weight_matrix.dtype
+    num_visibles, num_states, num_hiddens = weight_matrix.shape
+    
+    # 3D one-hot for the visible biases: (B, N_v, N_s)
+    v_oh_3d = one_hot(v.to(torch.int32), num_classes=num_states, dtype=dtype)
+    
+    # Flattened one-hot for matrix multiplication: (B, N_v * N_s)
+    v_oh = v_oh_3d.view(-1, num_visibles * num_states)
+    weight_matrix_oh = weight_matrix.view(num_visibles * num_states, num_hiddens)
+    
+    local_field = hbias + (v_oh @ weight_matrix_oh)
+    sigmoid_term = torch.sigmoid(local_field)
+    
+    # Gradients (preserving the batch dimension)
+    grad_vbias = -v_oh_3d
+    grad_hbias = -sigmoid_term
+    
+    # To match your ising_ising structure, leaving weight matrix grad as None
+    # Full computation would be: -torch.bmm(v_oh_3d.view(B, -1, 1), sigmoid_term.unsqueeze(1))
+    grad_weight_matrix = None
+    
+    return grad_vbias, grad_hbias, grad_weight_matrix
 
 def _init_chains(
     num_samples: int,
@@ -199,10 +309,14 @@ def _init_parameters(
     device: torch.device,
     dtype: torch.dtype,
     var_init: float = 1e-4,
+    num_states: int = None,
 ) -> tuple[Tensor, Tensor, Tensor]:
     _, num_visibles = data.shape
     eps = 1e-7
-    num_states = int(torch.max(data) + 1)
+    if num_states is None:
+        num_states = int(torch.max(data) + 1)
+
+    # num_states = data.get_num_states()
     all_states = torch.arange(num_states).reshape(-1, 1, 1).to(data.device)
     frequencies = (data == all_states).type(torch.float32).mean(1).to(device)
     frequencies = torch.clamp(frequencies, min=eps, max=(1.0 - eps))

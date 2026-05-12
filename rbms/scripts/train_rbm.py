@@ -66,6 +66,7 @@ def main(args, map_model=map_model):
             dtype=args["dtype"],
             dataset_name=args["dataset"],
             variable_type="ising",
+            num_states=args["num_states"],
         )
         test_dataset = None
     else:
@@ -180,7 +181,7 @@ def main(args, map_model=map_model):
 
         case _:
             raise ValueError(f"No training type {args['training_type']} supported.")
-
+    
     train(
         train_dataset=train_dataset,
         test_dataset=test_dataset,

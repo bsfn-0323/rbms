@@ -215,15 +215,23 @@ class VarRBMDataset(RBMDataset):
         num_chains: int, 
         dataset_name: str,
         variable_type: str,
+        num_states: int | None=None,
         device: torch.device | str = "cuda",
         dtype: torch.dtype = torch.float32,
     ):
         # Generate dummy numpy arrays to feed into the parent constructor
-        dummy_data = np.zeros((num_chains, num_visibles), dtype=np.float32)
-        dummy_labels = np.zeros(num_chains, dtype=np.int32)
-        dummy_weights = np.ones(num_chains, dtype=np.float32)
-        dummy_names = np.array([f"chain_{i}" for i in range(num_chains)], dtype=object)
-        
+        if num_states is not None:
+            self.num_states = num_states
+            dummy_data = np.random.choice(num_states,size= (num_chains, num_visibles))
+            dummy_labels = np.zeros(num_chains, dtype=np.int32)
+            dummy_weights = np.ones(num_chains, dtype=np.float32)
+            dummy_names = np.array([f"chain_{i}" for i in range(num_chains)], dtype=object)
+        else:
+            dummy_data = np.zeros((num_chains, num_visibles), dtype=np.float32)
+            dummy_labels = np.zeros(num_chains, dtype=np.int32)
+            dummy_weights = np.ones(num_chains, dtype=np.float32)
+            dummy_names = np.array([f"chain_{i}" for i in range(num_chains)], dtype=object)
+            
         self.num_chains = num_chains
         self.num_visibles = num_visibles
         self.J1=J1
@@ -255,3 +263,11 @@ class VarRBMDataset(RBMDataset):
     
     def get_num_visibles(self):
         return self.num_visibles
+    
+    def get_num_states(self) -> int:
+        """Get the number of states.
+
+        Returns:
+            int: The number of states.
+        """
+        return self.num_states

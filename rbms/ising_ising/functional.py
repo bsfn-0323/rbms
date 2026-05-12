@@ -183,6 +183,7 @@ def compute_var_gradient(
         vbias=params.vbias,
         hbias=params.hbias,
         weight_matrix=params.weight_matrix,
+        eta=eta,
     )
     
     return loss,deltaE

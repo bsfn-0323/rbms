@@ -68,6 +68,14 @@ def _init_training(
         dtype=dtype,
         var_init=var_init
     )
+    
+    # J = train_dataset.J2
+    # UJ = J.svd().U
+    # _,S,Vt = torch.linalg.svd(params.weight_matrix,full_matrices=False)
+    # S = torch.diag_embed(S)
+    # print(f"UJ = {UJ.shape}, S = {S.shape}, Vt = {Vt.shape}")
+
+    # params.weight_matrix= UJ @ S @ Vt
 
     # Permanent chains
     parallel_chains = params.init_chains(num_samples=num_chains)

@@ -14,6 +14,8 @@ from rbms.potts_bernoulli.implement import (
     _sample_hiddens,
     _sample_visibles,
     _zero_sum_gauge,
+    _compute_var_gradient,
+    _compute_energy_visibles_gradient
 )
 
 
@@ -141,6 +143,52 @@ def compute_gradient(
         centered=centered,
     )
 
+def compute_var_gradient(
+    J1: Tensor,
+    J2: Tensor,
+    chains: dict[str, Tensor],
+    params: PBRBM,
+    eta: float = 0.0,
+) -> float:
+    """Compute the variational gradient for each parameter and attach it.
+
+    Args:
+        J1 (Tensor): One-body interaction term.
+        J2 (Tensor): Two-body interaction term.
+        chains (dict[str, Tensor]): The parallel chains used for gradient computation.
+        params (PBRBM): The parameters of the RBM.
+        eta (float): Weight of the entropic term.
+    """
+    loss = _compute_var_gradient(
+        J1=J1,
+        J2=J2,
+        v_chain=chains["visible"],
+        h_chain=chains["hidden"],
+        w_chain=chains["weights"],
+        vbias=params.vbias,
+        hbias=params.hbias,
+        weight_matrix=params.weight_matrix,
+        eta=eta,
+    )
+    
+    return loss
+
+def compute_energy_visibles_gradient(v: Tensor, params: PBRBM) -> tuple[Tensor, Tensor, Tensor]:
+    """Compute the gradient of the marginalized energy with respect to the parameters.
+
+    Args:
+        v (Tensor): Visible configurations.
+        params (PBRBM): The parameters of the RBM.
+
+    Returns:
+        tuple[Tensor, Tensor, Tensor]: The gradients with respect to visible biases, hidden biases and weight matrix.
+    """
+    return _compute_energy_visibles_gradient(
+        v=v,
+        vbias=params.vbias,
+        hbias=params.hbias,
+        weight_matrix=params.weight_matrix,
+    )
 
 def init_chains(
     num_samples: int,
