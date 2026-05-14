@@ -115,7 +115,7 @@ def train(
 
         for opt in optimizer:
             if isinstance(opt, NGD):
-                opt.step(v_chain=parallel_chains["visible"], model=params,scale =1)
+                opt.step(v_chain=parallel_chains["visible"], model=params,scale =0.01)
             else:
                 opt.step()
 
@@ -148,8 +148,8 @@ def train(
             pbar.write("learning rate :")
             for i in range(len(optimizer)):
                 pbar.write(f"    - {names_params[i]} : {learning_rates[i]:.6f}")
-            # pbar.write(f"scale : {opt.reg:.3g}")
-            # pbar.write(f"cg steps: {opt.cg_step}")
+            pbar.write(f"scale : {opt.reg:.3g}")
+            pbar.write(f"cg steps: {opt.cg_step}")
 
             if variational:
                 pbar.write("loss : ")
