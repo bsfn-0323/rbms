@@ -176,8 +176,8 @@ def _compute_var_gradient(
     weight_matrix.grad = grad_weight_matrix 
     # vbias.grad = grad_vbias + gamma * entropy_vbias
     # hbias.grad = grad_hbias + gamma * entropy_hbias
-    vbias.grad = torch.zeros(weight_matrix.shape[0])  # Zero out the visible bias gradient to prevent updates
-    hbias.grad = torch.zeros(weight_matrix.shape[1])  # Zero out the hidden bias gradient to prevent updates
+    vbias.grad = torch.zeros(weight_matrix.shape[0],device = weight_matrix.grad.device)  # Zero out the visible bias gradient to prevent updates
+    hbias.grad = torch.zeros(weight_matrix.shape[1],device = weight_matrix.grad.device)  # Zero out the hidden bias gradient to prevent updates
     # The variance loss simplifies neatly with the centered deltaE
     return loss.item()
 
