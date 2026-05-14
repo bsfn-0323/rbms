@@ -115,7 +115,7 @@ def train(
 
         for opt in optimizer:
             if isinstance(opt, NGD):
-                opt.step(v_chain=parallel_chains["visible"], model=params,scale =0.01)
+                opt.step(v_chain=parallel_chains["visible"], model=params,scale =1)
             else:
                 opt.step()
 
