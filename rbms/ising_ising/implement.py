@@ -145,39 +145,39 @@ def _compute_var_gradient(
     # Cov(X, Y) = E[X * (Y - E[Y])]. By centering the scalars first, 
     # we bypass calculating the mean of the massive gradient tensors entirely.
     deltaE_c = (deltaE - deltaE.mean()).view(-1, 1)  # Shape: (B, 1)
-    F_c = (F - F.mean()).view(-1, 1)                 # Shape: (B, 1)
+    # F_c = (F - F.mean()).view(-1, 1)                 # Shape: (B, 1)
     
     # 3. OPTIMIZED WEIGHT GRADIENTS (Pure 2D Matrix Multiplication)
     # v_chain.T is (N_v, B). tanh_term * deltaE_c is (B, N_h).
     # The @ operator resolves to a highly optimized cuBLAS routine.
     grad_weight_matrix = (v_chain.T @ (tanh_term * deltaE_c)) / B
-    entropy_weight_matrix = (v_chain.T @ (tanh_term * F_c)) / B
+    # entropy_weight_matrix = (v_chain.T @ (tanh_term * F_c)) / B
     
     # 4. OPTIMIZED BIAS GRADIENTS
     # Broadcasting takes care of the element-wise multiplication before the mean
-    grad_hbias = (tanh_term * deltaE_c).mean(dim=0)
-    entropy_hbias = (tanh_term * F_c).mean(dim=0)
+    # grad_hbias = (tanh_term * deltaE_c).mean(dim=0)
+    # entropy_hbias = (tanh_term * F_c).mean(dim=0)
 
-    grad_vbias = (v_chain * deltaE_c).mean(dim=0)
-    entropy_vbias = (v_chain * F_c).mean(dim=0)
+    # grad_vbias = (v_chain * deltaE_c).mean(dim=0)
+    # entropy_vbias = (v_chain * F_c).mean(dim=0)
     
     # 5. DYNAMIC GAMMA CALCULATION
-    norm_grad = grad_weight_matrix.norm()
-    norm_grad_ent = entropy_weight_matrix.norm()
+    # norm_grad = grad_weight_matrix.norm()
+    # norm_grad_ent = entropy_weight_matrix.norm()
     target_percentage = eta
     
     # Added 1e-8 epsilon to prevent division by zero in the first step
     loss = 0.5 * (deltaE_c**2).mean()
 
-    gamma = (norm_grad * target_percentage) / (norm_grad_ent + 1e-8)
+    # gamma = (norm_grad * target_percentage) / (norm_grad_ent + 1e-8)
 
     
     # 6. ATTACH GRADIENTS
-    weight_matrix.grad = grad_weight_matrix + eta * entropy_weight_matrix
-    vbias.grad = grad_vbias + gamma * entropy_vbias
-    hbias.grad = grad_hbias + gamma * entropy_hbias
-    vbias.grad = torch.zeros_like(vbias.grad)  # Zero out the visible bias gradient to prevent updates
-    hbias.grad = torch.zeros_like(hbias.grad)  # Zero out the hidden bias gradient to prevent updates
+    weight_matrix.grad = grad_weight_matrix 
+    # vbias.grad = grad_vbias + gamma * entropy_vbias
+    # hbias.grad = grad_hbias + gamma * entropy_hbias
+    vbias.grad = torch.zeros(weight_matrix.shape[0])  # Zero out the visible bias gradient to prevent updates
+    hbias.grad = torch.zeros(weight_matrix.shape[1])  # Zero out the hidden bias gradient to prevent updates
     # The variance loss simplifies neatly with the centered deltaE
     return loss.item()
 
