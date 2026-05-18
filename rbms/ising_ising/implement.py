@@ -123,6 +123,7 @@ def _compute_gradient(
 def _compute_var_gradient(
     J1:  Tensor,
     J2:  Tensor,
+    J3: Tensor,
     v_chain: Tensor,
     h_chain: Tensor,
     w_chain: Tensor,
@@ -135,7 +136,7 @@ def _compute_var_gradient(
     B = v_chain.size(0)
     
     # 1. Compute energies and local fields
-    betaH = _compute_hamiltonian(v_chain, J1, J2)
+    betaH = _compute_hamiltonian(v_chain, J1, J2,J3)
     local_field = hbias + (v_chain @ weight_matrix)
     tanh_term = torch.tanh(local_field)
     F = _compute_energy_visibles(v_chain, vbias, hbias, weight_matrix)
@@ -155,16 +156,16 @@ def _compute_var_gradient(
     
     # 4. OPTIMIZED BIAS GRADIENTS
     # Broadcasting takes care of the element-wise multiplication before the mean
-    # grad_hbias = (tanh_term * deltaE_c).mean(dim=0)
+    grad_hbias = (tanh_term * deltaE_c).mean(dim=0)
     # entropy_hbias = (tanh_term * F_c).mean(dim=0)
 
-    # grad_vbias = (v_chain * deltaE_c).mean(dim=0)
+    grad_vbias = (v_chain * deltaE_c).mean(dim=0)
     # entropy_vbias = (v_chain * F_c).mean(dim=0)
     
     # 5. DYNAMIC GAMMA CALCULATION
     # norm_grad = grad_weight_matrix.norm()
     # norm_grad_ent = entropy_weight_matrix.norm()
-    target_percentage = eta
+    # target_percentage = eta
     
     # Added 1e-8 epsilon to prevent division by zero in the first step
     loss = 0.5 * (deltaE_c**2).mean()
@@ -174,24 +175,20 @@ def _compute_var_gradient(
     
     # 6. ATTACH GRADIENTS
     weight_matrix.grad = grad_weight_matrix 
-    # vbias.grad = grad_vbias + gamma * entropy_vbias
-    # hbias.grad = grad_hbias + gamma * entropy_hbias
-    vbias.grad = torch.zeros(weight_matrix.shape[0],device = weight_matrix.grad.device)  # Zero out the visible bias gradient to prevent updates
-    hbias.grad = torch.zeros(weight_matrix.shape[1],device = weight_matrix.grad.device)  # Zero out the hidden bias gradient to prevent updates
+    vbias.grad = grad_vbias 
+    hbias.grad = grad_hbias 
+    # vbias.grad = torch.zeros(weight_matrix.shape[0],device = weight_matrix.grad.device)  # Zero out the visible bias gradient to prevent updates
+    # hbias.grad = torch.zeros(weight_matrix.shape[1],device = weight_matrix.grad.device)  # Zero out the hidden bias gradient to prevent updates
     # The variance loss simplifies neatly with the centered deltaE
     return loss.item()
 
 def _compute_hamiltonian(
-    v:Tensor, J1: Tensor, J2:Tensor
+    v:Tensor, J1: Tensor, J2:Tensor, J3:Tensor 
 ) -> Tensor:
     field = v@J1
     interaction = ((v @ J2) * v).sum(1)
-    return -field - 0.5*interaction
-
-# def _compute_local_field(
-#     v:Tensor, J1: Tensor, J2: Tensor
-# ) -> Tensor:
-#     return  -v@J2 - J1
+    interaction_3 = torch.einsum("bi,bj,bk,ijk->b", v,v,v,J3)
+    return -field - 0.5*interaction - (1.0/6.0)*interaction_3
 
 def _init_chains(
     num_samples: int,

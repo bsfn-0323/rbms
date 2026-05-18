@@ -53,6 +53,12 @@ def add_args_dataset(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         help="(Defaults to None, will create a zero tensor). Path to a data file (type should be .npy)"
     )
     dataset_args.add_argument(
+        "--j3",
+        type=str,
+        default=None,
+        help="(Defaults to None, will create a zero tensor). Path to a data file (type should be .npy)"
+    )
+    dataset_args.add_argument(
         "--num_states",
         type=int,
         default=None,

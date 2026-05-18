@@ -56,13 +56,14 @@ def train(
             opt.zero_grad(set_to_none=False)
         #There should be an if logic for variational
         if variational:
-            j1,j2 = train_dataset.J1,train_dataset.J2
+            j1,j2,j3 = train_dataset.J1,train_dataset.J2, train_dataset.J3
             parallel_chains= sampler.get_conf_grad(batch=None) 
             # loss,deltaE = params.compute_var_gradient(
             
             loss = params.compute_var_gradient(    
                 J1=j1,
                 J2=j2,
+                J3=j3,
                 chains=parallel_chains,
                 eta=eta
             )
@@ -115,9 +116,8 @@ def train(
 
         for opt in optimizer:
             if isinstance(opt, NGD):
-                opt.step(v_chain=parallel_chains["visible"], model=params,scale =1)
-            else:
-                opt.step()
+                opt.prepare(parallel_chains["visible"],scale =1)
+            opt.step()
 
         params.post_grad_update()
         sampler.post_grad_update(params=params)

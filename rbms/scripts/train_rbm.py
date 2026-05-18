@@ -55,11 +55,14 @@ def main(args, map_model=map_model):
         J2 = torch.from_numpy(np.load(args["j2"])).to(args["dtype"]).to(args["device"]) if args["j2"] is not None else torch.zeros(args["num_visibles"],args["num_visibles"]).to(args["dtype"]).to(args["device"])
         J1 = J1/temp
         J2 = J2/temp
+        J3 = torch.from_numpy(np.load(args["j3"])).to(args["dtype"]).to(args["device"])/temp if args["j3"] is not None else None
+
         num_visibles = args["num_visibles"]
         print(f"Temp = {args['vartemp']:.3f}")
         train_dataset = VarRBMDataset(
             J1=J1,
             J2=J2,
+            J3=J3,
             num_visibles=num_visibles,
             num_chains=args["num_chains"],
             device=args["device"],
