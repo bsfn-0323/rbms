@@ -162,7 +162,7 @@ class NGD(Optimizer):
 
     @torch.no_grad()
     def step(self, closure=None):
-        max_lr = 10/self.model.weight_matrix.numel()**0.5
+        max_lr = 50/math.sqrt(self.model.weight_matrix.numel()) # Cap learning rate to prevent divergence on large models
         end = None
         if closure is not None:
             with torch.enable_grad():
@@ -214,10 +214,10 @@ class NGD(Optimizer):
                 current_r_norm = init_r_norm
                 self.cg_step = 0
 
-                # while current_r_norm / init_r_norm > 0.01:
-                #     if self.cg_step >= group["cg_steps"]:
-                #         break
-                for _ in range(group["cg_steps"]):
+                while current_r_norm / init_r_norm > 0.01:
+                    if self.cg_step >= group["cg_steps"]:
+                        break
+                # for _ in range(group["cg_steps"]):
                     Sp = self._fvp(p_vec, v_eff, tau, self.reg, update_biases)
                     p_Sp = sum((pv * spv).sum() for pv, spv in zip(p_vec, Sp))
                     if p_Sp.item() <= 1e-20:
@@ -259,7 +259,7 @@ class NGD(Optimizer):
             norm_g = sum(g_i.square().sum() for g_i in active_grads).sqrt()
             self.cos_sim = (dot / (norm_d * norm_g + 1e-20)).item()
 
-            group["lr"] *=1.0 + 0.001*self.cos_sim # Scale learning rate by cosine similarity
+            group["lr"] *=1.0 + 0.00075*self.cos_sim # Scale learning rate by cosine similarity
             group["lr"] = min(group["lr"], max_lr)
             sign = 1 if group["maximize"] else -1
             for p_tensor, d in zip(active_params, delta):

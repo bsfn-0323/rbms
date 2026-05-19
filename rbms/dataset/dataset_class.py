@@ -211,6 +211,7 @@ class VarRBMDataset(RBMDataset):
         self, 
         J1:Tensor,
         J2:Tensor,
+        J3:Tensor | None,
         num_visibles: int, 
         num_chains: int, 
         dataset_name: str,
@@ -236,6 +237,7 @@ class VarRBMDataset(RBMDataset):
         self.num_visibles = num_visibles
         self.J1=J1
         self.J2=J2
+        self.J3=J3
         # self.dataset_name = dataset_name
         # self.device = device
         # self.dtype = dtype

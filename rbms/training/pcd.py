@@ -166,6 +166,7 @@ def train(
                 learning_rate=learning_rate,
                 flags=flags,
                 loss=loss,
+                
             )
 
             save_sampler(filename, sampler, idx)
