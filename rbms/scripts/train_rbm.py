@@ -49,31 +49,52 @@ def main(args, map_model=map_model):
     )
     #if logic
     if args["variational"]:
-        #load J1 J2
-        temp = args['vartemp']
-        J1 = torch.from_numpy(np.load(args["j1"])).to(args["dtype"]).to(args["device"]) if args["j1"] is not None else torch.zeros(args["num_visibles"]).to(args["dtype"]).to(args["device"])
-        J2 = torch.from_numpy(np.load(args["j2"])).to(args["dtype"]).to(args["device"]) if args["j2"] is not None else torch.zeros(args["num_visibles"],args["num_visibles"]).to(args["dtype"]).to(args["device"])
-        J1 = J1/temp
-        J2 = J2/temp
-        J3 = torch.from_numpy(np.load(args["j3"])).to(args["dtype"]).to(args["device"])/temp if args["j3"] is not None else None
-        print(f"J1: {J1}")
-        print(f"J2: {J2}")
-        if J3 is not None:
-            print(f"J3: {J3}")
-        num_visibles = args["num_visibles"]
-        print(f"Temp = {args['vartemp']:.3f}")
-        train_dataset = VarRBMDataset(
-            J1=J1,
-            J2=J2,
-            J3=J3,
-            num_visibles=num_visibles,
-            num_chains=args["num_chains"],
-            device=args["device"],
-            dtype=args["dtype"],
-            dataset_name=args["dataset"],
-            variable_type="ising",
-            num_states=args["num_states"],
-        )
+        temp = args["vartemp"]
+        print(f"Temp = {temp:.3f}")
+        if args.get("hub_U") is not None:
+            # Hubbard-Stratonovich variational mode
+            U, t, mu = args["hub_U"], args["hub_t"], args["hub_mu"]
+            A = torch.from_numpy(np.load(args["j2"])).to(args["dtype"]).to(args["device"])
+            N = A.shape[0]
+            K = (-t * A - mu * torch.eye(N, device=args["device"], dtype=args["dtype"])) / temp
+            lam = float(torch.acosh(torch.exp(torch.tensor(U / (2 * temp)))))
+            print(f"Hubbard mode: U={U}, t={t}, mu={mu}, lam={lam:.6f}")
+            train_dataset = VarRBMDataset(
+                J1=None, J2=None, J3=None,
+                num_visibles=N,
+                num_chains=args["num_chains"],
+                device=args["device"],
+                dtype=args["dtype"],
+                dataset_name=args.get("dataset", "hubbard"),
+                variable_type="ising",
+                num_states=args["num_states"],
+                K=K,
+                lam=lam,
+            )
+        else:
+            # Generic Ising variational mode
+            J1 = torch.from_numpy(np.load(args["j1"])).to(args["dtype"]).to(args["device"]) if args["j1"] is not None else torch.zeros(args["num_visibles"]).to(args["dtype"]).to(args["device"])
+            J2 = torch.from_numpy(np.load(args["j2"])).to(args["dtype"]).to(args["device"]) if args["j2"] is not None else torch.zeros(args["num_visibles"], args["num_visibles"]).to(args["dtype"]).to(args["device"])
+            J1 = J1 / temp
+            J2 = J2 / temp
+            J3 = torch.from_numpy(np.load(args["j3"])).to(args["dtype"]).to(args["device"]) / temp if args["j3"] is not None else None
+            print(f"J1: {J1}")
+            print(f"J2: {J2}")
+            if J3 is not None:
+                print(f"J3: {J3}")
+            num_visibles = args["num_visibles"]
+            train_dataset = VarRBMDataset(
+                J1=J1,
+                J2=J2,
+                J3=J3,
+                num_visibles=num_visibles,
+                num_chains=args["num_chains"],
+                device=args["device"],
+                dtype=args["dtype"],
+                dataset_name=args["dataset"],
+                variable_type="ising",
+                num_states=args["num_states"],
+            )
         test_dataset = None
     else:
         train_dataset, test_dataset = load_dataset(

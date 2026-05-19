@@ -56,17 +56,23 @@ def train(
             opt.zero_grad(set_to_none=False)
         #There should be an if logic for variational
         if variational:
-            j1,j2,j3 = train_dataset.J1,train_dataset.J2, train_dataset.J3
-            parallel_chains= sampler.get_conf_grad(batch=None) 
-            # loss,deltaE = params.compute_var_gradient(
-            
-            loss = params.compute_var_gradient(    
-                J1=j1,
-                J2=j2,
-                J3=j3,
-                chains=parallel_chains,
-                eta=eta
-            )
+            parallel_chains = sampler.get_conf_grad(batch=None)
+            if getattr(train_dataset, 'K', None) is not None:
+                loss = params.compute_hubbard_var_gradient(
+                    K=train_dataset.K,
+                    lam=train_dataset.lam,
+                    chains=parallel_chains,
+                    eta=eta,
+                )
+            else:
+                j1, j2, j3 = train_dataset.J1, train_dataset.J2, train_dataset.J3
+                loss = params.compute_var_gradient(
+                    J1=j1,
+                    J2=j2,
+                    J3=j3,
+                    chains=parallel_chains,
+                    eta=eta,
+                )
             if ema_loss is None:
                 ema_loss = loss
                 initial_loss = loss # Capture the starting plateau level

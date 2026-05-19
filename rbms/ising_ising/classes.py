@@ -12,11 +12,12 @@ from rbms.ising_ising.implement import (
     _compute_energy_visibles,
     _compute_gradient,
     _compute_var_gradient,
+    _compute_hubbard_var_gradient,
     _init_chains,
     _init_parameters,
     _sample_hiddens,
     _sample_visibles,
-    _compute_energy_visibles_gradient
+    _compute_energy_visibles_gradient,
 )
 
 
@@ -132,11 +133,24 @@ class IIRBM(RBM):
             centered=centered,
         )
 
-    def compute_var_gradient(self, J1,J2,J3, chains,eta):
+    def compute_var_gradient(self, J1, J2, J3, chains, eta):
         return _compute_var_gradient(
-            J1 = J1,
-            J2 = J2,
-            J3 = J3,
+            J1=J1,
+            J2=J2,
+            J3=J3,
+            v_chain=chains["visible"],
+            h_chain=chains["hidden_mag"],
+            w_chain=chains["weights"],
+            vbias=self.vbias,
+            hbias=self.hbias,
+            weight_matrix=self.weight_matrix,
+            eta=eta,
+        )
+
+    def compute_hubbard_var_gradient(self, K: Tensor, lam: float, chains: dict, eta: float) -> float:
+        return _compute_hubbard_var_gradient(
+            K=K,
+            lam=lam,
             v_chain=chains["visible"],
             h_chain=chains["hidden_mag"],
             w_chain=chains["weights"],

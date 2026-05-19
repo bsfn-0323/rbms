@@ -59,6 +59,24 @@ def add_args_dataset(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         help="(Defaults to None, will create a zero tensor). Path to a data file (type should be .npy)"
     )
     dataset_args.add_argument(
+        "--hub_U",
+        type=float,
+        default=None,
+        help="(Defaults to None). On-site Hubbard interaction U. Set to enable Hubbard variational mode.",
+    )
+    dataset_args.add_argument(
+        "--hub_t",
+        type=float,
+        default=1.0,
+        help="(Defaults to 1.0). Hopping amplitude t. Lattice topology provided via --j2.",
+    )
+    dataset_args.add_argument(
+        "--hub_mu",
+        type=float,
+        default=0.0,
+        help="(Defaults to 0.0). Chemical potential μ. Default 0 corresponds to half filling.",
+    )
+    dataset_args.add_argument(
         "--num_states",
         type=int,
         default=None,

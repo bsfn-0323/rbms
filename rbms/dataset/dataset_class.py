@@ -208,22 +208,24 @@ class VarRBMDataset(RBMDataset):
     Provides empty data and uniform weights to satisfy the standard PCD training loop.
     """
     def __init__(
-        self, 
-        J1:Tensor,
-        J2:Tensor,
-        J3:Tensor | None,
-        num_visibles: int, 
-        num_chains: int, 
+        self,
+        J1: Tensor | None,
+        J2: Tensor | None,
+        J3: Tensor | None,
+        num_visibles: int,
+        num_chains: int,
         dataset_name: str,
         variable_type: str,
-        num_states: int | None=None,
+        num_states: int | None = None,
         device: torch.device | str = "cuda",
         dtype: torch.dtype = torch.float32,
+        K: Tensor | None = None,
+        lam: float | None = None,
     ):
         # Generate dummy numpy arrays to feed into the parent constructor
         if num_states is not None:
             self.num_states = num_states
-            dummy_data = np.random.choice(num_states,size= (num_chains, num_visibles))
+            dummy_data = np.random.choice(num_states, size=(num_chains, num_visibles))
             dummy_labels = np.zeros(num_chains, dtype=np.int32)
             dummy_weights = np.ones(num_chains, dtype=np.float32)
             dummy_names = np.array([f"chain_{i}" for i in range(num_chains)], dtype=object)
@@ -232,12 +234,15 @@ class VarRBMDataset(RBMDataset):
             dummy_labels = np.zeros(num_chains, dtype=np.int32)
             dummy_weights = np.ones(num_chains, dtype=np.float32)
             dummy_names = np.array([f"chain_{i}" for i in range(num_chains)], dtype=object)
-            
+
         self.num_chains = num_chains
         self.num_visibles = num_visibles
-        self.J1=J1
-        self.J2=J2
-        self.J3=J3
+        self.J1 = J1
+        self.J2 = J2
+        self.J3 = J3
+        # Hubbard-Stratonovich mode: precomputed hopping matrix K and HS coupling lam
+        self.K = K
+        self.lam = lam
         # self.dataset_name = dataset_name
         # self.device = device
         # self.dtype = dtype
