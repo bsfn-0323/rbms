@@ -149,18 +149,32 @@ def _compute_hamiltonian(
 
 
 def _compute_hubbard_hamiltonian(
-    v: Tensor,   # (B, N) — batch of HS Ising field configurations
-    K: Tensor,   # (N, N) — precomputed K = (-t·A - μ·I) / T
-    lam: float,  # HS coupling λ = arccosh(exp(U/(2T)))
-) -> Tensor:     # (B,) — effective action S_eff(s) = -log|det M_↑| - log|det M_↓|
-    diag_v = lam * v                                          # (B, N)
-    diag_embed_v = torch.diag_embed(diag_v)                   # (B, N, N)
-    K_exp = K.unsqueeze(0)                                    # (1, N, N) — broadcast, no copy
-    # Stack spin-up and spin-down into one batched slogdet call → (2B, N, N)
-    M = torch.cat([K_exp + diag_embed_v, K_exp - diag_embed_v], dim=0)
-    _, logabsdets = torch.linalg.slogdet(M)                   # (2B,)
-    B = v.shape[0]
-    return -(logabsdets[:B] + logabsdets[B:])                 # (B,)
+    v: Tensor,      # (B, L_tau * N) — flattened HS fields s_{τ,i}
+    expK: Tensor,   # (N, N) — exp(-Δτ · K_mat), precomputed once
+    lam: float,     # HS coupling λ = arccosh(exp(Δτ·U/2))
+    L_tau: int,     # number of imaginary-time slices
+) -> Tensor:        # (B,) — S_eff(s) = -log|det M_↑| - log|det M_↓|
+    B_size = v.shape[0]
+    N = expK.shape[0]
+    s = v.view(B_size, L_tau, N)                                          # (B, L_τ, N)
+
+    # Pack spin-up and spin-down into a single 2B-batch:
+    #   up:   diag = exp(+λ·s)
+    #   down: diag = exp(-λ·s)
+    diag_all = torch.cat([torch.exp(lam * s), torch.exp(-lam * s)], dim=0)  # (2B, L_τ, N)
+
+    # Sequential product: B(L_τ) · … · B(1), with B(τ) = expK · diag(exp(σ·λ·s_τ))
+    # Memory-efficient: only O(2B·N²) intermediates.
+    prod = None
+    for tau in range(L_tau):
+        # B_t[b, i, j] = expK[i, j] * diag_all[b, τ, j]
+        B_t = expK.unsqueeze(0) * diag_all[:, tau].unsqueeze(-2)            # (2B, N, N)
+        prod = B_t if prod is None else B_t @ prod
+
+    eye = torch.eye(N, device=v.device, dtype=v.dtype)
+    M = eye + prod                                                          # (2B, N, N)
+    _, logabsdets = torch.linalg.slogdet(M)                                 # (2B,)
+    return -(logabsdets[:B_size] + logabsdets[B_size:])
 
 
 def _compute_var_gradient_from_betaH(
@@ -185,12 +199,15 @@ def _compute_var_gradient_from_betaH(
     weight_matrix.grad = grad_weight_matrix
     vbias.grad = grad_vbias
     hbias.grad = grad_hbias
+    # vbias.grad = torch.zeros_like(vbias)
+    # hbias.grad = torch.zeros_like(hbias)
     return (0.5 * (deltaE_c**2).mean()).item()
 
 
 def _compute_hubbard_var_gradient(
-    K: Tensor,
+    expK: Tensor,
     lam: float,
+    L_tau: int,
     v_chain: Tensor,
     h_chain: Tensor,
     w_chain: Tensor,
@@ -199,7 +216,7 @@ def _compute_hubbard_var_gradient(
     weight_matrix: Tensor,
     eta: float,
 ) -> float:
-    betaH = _compute_hubbard_hamiltonian(v_chain, K, lam)
+    betaH = _compute_hubbard_hamiltonian(v_chain, expK, lam, L_tau)
     return _compute_var_gradient_from_betaH(betaH, v_chain, h_chain, w_chain, vbias, hbias, weight_matrix, eta)
 
 def _init_chains(

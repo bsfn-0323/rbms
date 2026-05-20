@@ -77,6 +77,12 @@ def add_args_dataset(parser: argparse.ArgumentParser) -> argparse.ArgumentParser
         help="(Defaults to 0.0). Chemical potential μ. Default 0 corresponds to half filling.",
     )
     dataset_args.add_argument(
+        "--L_tau",
+        type=int,
+        default=1,
+        help="(Defaults to 1). Number of imaginary-time slices in the Hubbard Trotter decomposition.",
+    )
+    dataset_args.add_argument(
         "--num_states",
         type=int,
         default=None,

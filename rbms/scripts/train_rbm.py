@@ -52,24 +52,35 @@ def main(args, map_model=map_model):
         temp = args["vartemp"]
         print(f"Temp = {temp:.3f}")
         if args.get("hub_U") is not None:
-            # Hubbard-Stratonovich variational mode
+            # Hubbard-Stratonovich AFQMC variational mode
             U, t, mu = args["hub_U"], args["hub_t"], args["hub_mu"]
+            L_tau = args["L_tau"]
+            dtau = 1.0 / (temp * L_tau)                       # Δτ = β / L_τ
+
             A = torch.from_numpy(np.load(args["j2"])).to(args["dtype"]).to(args["device"])
             N = A.shape[0]
-            K = (-t * A - mu * torch.eye(N, device=args["device"], dtype=args["dtype"])) / temp
-            lam = float(torch.acosh(torch.exp(torch.tensor(U / (2 * temp)))))
-            print(f"Hubbard mode: U={U}, t={t}, mu={mu}, lam={lam:.6f}")
+            K_mat = -t * A - mu * torch.eye(N, device=args["device"], dtype=args["dtype"])
+            expK = torch.linalg.matrix_exp(-dtau * K_mat)     # (N, N)
+            lam = float(torch.acosh(torch.exp(torch.tensor(dtau * U / 2.0))))
+
+            print(f"Hubbard AFQMC: U={U} t={t} μ={mu} T={temp} L_τ={L_tau} Δτ={dtau:.4g} λ={lam:.6f}")
+            print(f"Visibles = L_τ · N = {L_tau} · {N} = {L_tau * N}")
+
+            # Visible layer is L_τ · N (one HS field per (time-slice, site))
+            args["num_visibles"] = L_tau * N
+
             train_dataset = VarRBMDataset(
                 J1=None, J2=None, J3=None,
-                num_visibles=N,
+                num_visibles=L_tau * N,
                 num_chains=args["num_chains"],
                 device=args["device"],
                 dtype=args["dtype"],
                 dataset_name=args.get("dataset", "hubbard"),
                 variable_type="ising",
                 num_states=args["num_states"],
-                K=K,
+                expK=expK,
                 lam=lam,
+                L_tau=L_tau,
             )
         else:
             # Generic Ising variational mode

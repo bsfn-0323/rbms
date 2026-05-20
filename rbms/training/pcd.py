@@ -7,6 +7,8 @@ from rbms.optim import NGD
 from tqdm.autonotebook import tqdm
 
 from rbms.classes import EBM, Sampler
+from rbms.ising_gaussian.classes import IGRBM
+from rbms.ising_ising.classes import IIRBM
 from rbms.dataset.dataset_class import RBMDataset
 from rbms.io import save_model, save_sampler
 from rbms.training.utils import EarlyStopper
@@ -57,22 +59,32 @@ def train(
         #There should be an if logic for variational
         if variational:
             parallel_chains = sampler.get_conf_grad(batch=None)
-            if getattr(train_dataset, 'K', None) is not None:
+            if getattr(train_dataset, 'expK', None) is not None:
                 loss = params.compute_hubbard_var_gradient(
-                    K=train_dataset.K,
+                    expK=train_dataset.expK,
                     lam=train_dataset.lam,
+                    L_tau=train_dataset.L_tau,
                     chains=parallel_chains,
                     eta=eta,
                 )
             else:
                 j1, j2, j3 = train_dataset.J1, train_dataset.J2, train_dataset.J3
-                loss = params.compute_var_gradient(
-                    J1=j1,
-                    J2=j2,
-                    J3=j3,
-                    chains=parallel_chains,
-                    eta=eta,
-                )
+                if isinstance(params,IIRBM):
+                    loss = params.compute_var_gradient(
+                        J1=j1,
+                        J2=j2,
+                        J3=j3,
+                        chains=parallel_chains,
+                        eta=eta,
+                    )
+                elif isinstance(params,IGRBM):
+                    loss = params.compute_var_gradient(
+                        J1=j1,
+                        J2=j2,
+                        # J3=j3,
+                        chains=parallel_chains,
+                        eta=eta,
+                    )
             if ema_loss is None:
                 ema_loss = loss
                 initial_loss = loss # Capture the starting plateau level

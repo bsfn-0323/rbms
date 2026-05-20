@@ -147,10 +147,13 @@ class IIRBM(RBM):
             eta=eta,
         )
 
-    def compute_hubbard_var_gradient(self, K: Tensor, lam: float, chains: dict, eta: float) -> float:
+    def compute_hubbard_var_gradient(
+        self, expK: Tensor, lam: float, L_tau: int, chains: dict, eta: float,
+    ) -> float:
         return _compute_hubbard_var_gradient(
-            K=K,
+            expK=expK,
             lam=lam,
+            L_tau=L_tau,
             v_chain=chains["visible"],
             h_chain=chains["hidden_mag"],
             w_chain=chains["weights"],

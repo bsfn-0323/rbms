@@ -219,8 +219,9 @@ class VarRBMDataset(RBMDataset):
         num_states: int | None = None,
         device: torch.device | str = "cuda",
         dtype: torch.dtype = torch.float32,
-        K: Tensor | None = None,
+        expK: Tensor | None = None,
         lam: float | None = None,
+        L_tau: int | None = None,
     ):
         # Generate dummy numpy arrays to feed into the parent constructor
         if num_states is not None:
@@ -240,9 +241,13 @@ class VarRBMDataset(RBMDataset):
         self.J1 = J1
         self.J2 = J2
         self.J3 = J3
-        # Hubbard-Stratonovich mode: precomputed hopping matrix K and HS coupling lam
-        self.K = K
+        # Hubbard-Stratonovich AFQMC mode:
+        #   expK  : (N, N) precomputed exp(-Δτ · K_mat)
+        #   lam   : HS coupling λ = arccosh(exp(Δτ·U/2))
+        #   L_tau : number of imaginary-time slices (total visibles = L_tau · N)
+        self.expK = expK
         self.lam = lam
+        self.L_tau = L_tau
         # self.dataset_name = dataset_name
         # self.device = device
         # self.dtype = dtype
