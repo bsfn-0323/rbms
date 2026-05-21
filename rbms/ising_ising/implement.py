@@ -168,7 +168,8 @@ def _compute_hubbard_hamiltonian(
     prod = None
     for tau in range(L_tau):
         # B_t[b, i, j] = expK[i, j] * diag_all[b, τ, j]
-        B_t = expK.unsqueeze(0) * diag_all[:, tau].unsqueeze(-2)            # (2B, N, N)
+        # B_t = expK.unsqueeze(0) * diag_all[:, tau].unsqueeze(-2)            # (2B, N, N)
+        B_t = diag_all[:, tau].unsqueeze(-1) * expK.unsqueeze(0)
         prod = B_t if prod is None else B_t @ prod
 
     eye = torch.eye(N, device=v.device, dtype=v.dtype)
