@@ -127,10 +127,11 @@ def _compute_var_gradient(
 
     
     # 6. ATTACH GRADIENTS
-    weight_matrix.grad = grad_weight_matrix + eta * entropy_weight_matrix
-    vbias.grad = grad_vbias + gamma * entropy_vbias
-    hbias.grad = grad_hbias + gamma * entropy_hbias
-    
+    weight_matrix.grad = grad_weight_matrix
+    # vbias.grad = grad_vbias + gamma * entropy_vbias
+    # hbias.grad = grad_hbias + gamma * entropy_hbias
+    vbias.grad = torch.zeros_like(vbias)
+    hbias.grad = torch.zeros_like(hbias)
     # The variance loss simplifies neatly with the centered deltaE
     return loss.item()
 

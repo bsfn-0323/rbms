@@ -10,7 +10,8 @@ from rbms.classes import EBM, Sampler
 from rbms.dataset.dataset_class import RBMDataset
 from rbms.io import save_model, save_sampler
 from rbms.training.utils import EarlyStopper
-
+from ptt.generic.classes import PTT
+from scipy.stats import kstat
 
 @torch.compile(dynamic=True, disable=True)
 @torch.no_grad
@@ -60,7 +61,7 @@ def train(
             parallel_chains= sampler.get_conf_grad(batch=None) 
             # loss,deltaE = params.compute_var_gradient(
             
-            loss = params.compute_var_gradient(    
+            loss,deltaE = params.compute_var_gradient(    
                 J1=j1,
                 J2=j2,
                 chains=parallel_chains,
@@ -148,12 +149,22 @@ def train(
             pbar.write("learning rate :")
             for i in range(len(optimizer)):
                 pbar.write(f"    - {names_params[i]} : {learning_rates[i]:.6f}")
-            pbar.write(f"scale : {opt.reg:.3g}")
-            pbar.write(f"cg steps: {opt.cg_step}")
+            if isinstance(optimizer[0], NGD):
+                pbar.write(f"scale : {opt.reg:.3g}")
+                pbar.write(f"cg steps: {opt.cg_step}")
 
             if variational:
                 pbar.write("loss : ")
                 pbar.write(f"{loss:.4f}")
+                #check if logz is computable
+                if isinstance(sampler,PTT):
+                    logz = sampler.compute_partition_function()[-1]
+                    pbar.write(f"Dkl: {(-deltaE.mean().item()-logz):.4f}")
+                    # deltaEnp = deltaE.cpu().numpy()
+                    # pbar.write(f"DE**1: {kstat(deltaEnp, 1):.4f}")
+                    # pbar.write(f"DE**2: {kstat(deltaEnp, 2):.4f}")
+                    # pbar.write(f"DE**3: {kstat(deltaEnp, 3):.4f}")
+                    # pbar.write(f"DE**4: {kstat(deltaEnp, 4):.4f}")
             # pbar.write(metrics)
             curr_time = time.perf_counter() - start
             learning_rate = torch.tensor([opt.param_groups[0]["lr"] for opt in optimizer])

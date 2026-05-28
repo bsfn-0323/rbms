@@ -48,8 +48,15 @@ def _compute_energy_visibles(
     return -field - log_term.sum(1)
 
 def _compute_energy_visibles_gradient(
-    v: Tensor, vbias: Tensor, hbias: Tensor, weight_matrix: Tensor
+    v: Tensor, vbias: Tensor, hbias: Tensor, weight_matrix: Tensor, average_over_batch: bool = True
 ) -> Tuple[Tensor, Tensor, Tensor]:
+    # if average_over_batch:
+    #     local_field = hbias + (v @ weight_matrix)
+    #     tanh_term = torch.tanh(local_field)
+    # else:
+    #     local_field = hbias[None, :] + (v @ weight_matrix)
+    #     tanh_term = torch.tanh(local_field)
+
     local_field = hbias + (v @ weight_matrix)
     tanh_term = torch.tanh(local_field)
     
@@ -164,8 +171,22 @@ def _compute_var_gradient(
     # 5. DYNAMIC GAMMA CALCULATION
     # norm_grad = grad_weight_matrix.norm()
     # norm_grad_ent = entropy_weight_matrix.norm()
-    target_percentage = eta
     
+    random_chain = torch.bernoulli(torch.full_like(v_chain, 0.5)) * 2 - 1
+    random_chain = random_chain.to(device=v_chain.device, dtype=v_chain.dtype)
+    grad_F_v,grad_F_h,_ = _compute_energy_visibles_gradient(
+        v=random_chain,
+        vbias=vbias,
+        hbias=hbias,
+        weight_matrix=weight_matrix,
+    )
+    F_centered = F - F.mean() # (B,)
+    # Since F_centered sums to zero, centering grad_F_weight_matrix across the
+    # batch contributes nothing to the contraction below, so we skip building
+    # the (B, N_v, N_h) outer-product tensor and contract via two matmuls.
+    l2_weight_matrix = -(grad_F_v * F_centered[:, None]).T @ grad_F_h / B
+
+
     # Added 1e-8 epsilon to prevent division by zero in the first step
     loss = 0.5 * (deltaE_c**2).mean()
 
@@ -173,13 +194,13 @@ def _compute_var_gradient(
 
     
     # 6. ATTACH GRADIENTS
-    weight_matrix.grad = grad_weight_matrix 
+    weight_matrix.grad = grad_weight_matrix +1e-04*l2_weight_matrix
     # vbias.grad = grad_vbias + gamma * entropy_vbias
     # hbias.grad = grad_hbias + gamma * entropy_hbias
     vbias.grad = torch.zeros(weight_matrix.shape[0],device = weight_matrix.grad.device)  # Zero out the visible bias gradient to prevent updates
     hbias.grad = torch.zeros(weight_matrix.shape[1],device = weight_matrix.grad.device)  # Zero out the hidden bias gradient to prevent updates
     # The variance loss simplifies neatly with the centered deltaE
-    return loss.item()
+    return loss.item(), deltaE
 
 def _compute_hamiltonian(
     v:Tensor, J1: Tensor, J2:Tensor

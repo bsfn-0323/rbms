@@ -184,10 +184,10 @@ class SGD_cossim(SGD):
 
 class NGD(Optimizer):
     # Added 'update_biases=True' flag to the initialization
-    def __init__(self, params, lr=0.001, cg_steps=50, init_reg=1, update_freq=1, warm_start=False, maximize=True, update_biases=True):
+    def __init__(self, params, lr=0.001, cg_steps=20, init_reg=1, update_freq=1, warm_start=False, maximize=True, update_biases=True,cossim=False):
         defaults = dict(lr=lr, cg_steps=cg_steps, reg=init_reg, update_freq=update_freq, warm_start=warm_start, maximize=maximize, update_biases=update_biases, step=0)
         super().__init__(params, defaults)
-        
+        self.cossim = cossim
         for group in self.param_groups:
             for p in group['params']:
                 self.state[p]['last_dt'] = torch.zeros_like(p.data)
@@ -256,7 +256,7 @@ class NGD(Optimizer):
             params = group["params"]
             # lr = group["lr"]
             update_biases = group["update_biases"]
-            
+            max_lr = 10/model.weight_matrix.numel()**0.5
             g = [p.grad.clone() for p in params]
             
             if group["step"] % group["update_freq"] == 0 or group["step"] == 1:
@@ -293,16 +293,16 @@ class NGD(Optimizer):
                 current_r_norm = initial_r_norm
                 self.cg_step = 0
                 
-                while (current_r_norm / initial_r_norm) > 0.01:
-                    if self.cg_step >= group["cg_steps"]:
-                        # print("CG broke due to reaching max iterations.")
-                        break
-                # for _ in range(group["cg_steps"]):
+                # while (current_r_norm / initial_r_norm) > 0.0001:
+                #     if self.cg_step >= group["cg_steps"]:
+                #         # print("CG broke due to reaching max iterations.")
+                #         break
+                for _ in range(group["cg_steps"]):
                     S_p = self._fvp(p_vec, v_chain_eff, tanh_term, self.reg, update_biases)
                     p_Sp = sum(torch.sum(pv * spv) for pv, spv in zip(p_vec, S_p))
                     
-                    if p_Sp.item() <= 1e-20:
-                        # print("CG broke due to non-positive curvature.")
+                    if p_Sp.item() <= 0:
+                        print("CG broke due to non-positive curvature.")
                         break
                         
                     alpha = (r_dot_r / p_Sp).item()
@@ -316,8 +316,8 @@ class NGD(Optimizer):
                     new_r_dot_r = sum(torch.sum(r * r) for r in residual)
                     current_r_norm = torch.sqrt(new_r_dot_r).item()
                     
-                    if new_r_dot_r.item() < 1e-20:
-                        # print("CG broke due to tiny residual norm.")
+                    if new_r_dot_r.item() < 0:
+                        print("CG broke due to tiny residual norm.")
                         break
                         
                     beta = (new_r_dot_r / r_dot_r).item()
@@ -335,20 +335,21 @@ class NGD(Optimizer):
                 active_params = params
                 active_grads = g
             
-            # # --- Added Cosine Similarity ---
-            dot_product = sum(torch.sum(dt * g_i) for dt, g_i in zip(delta_theta, active_grads))
-            norm_dt = torch.sqrt(sum(torch.sum(dt ** 2) for dt in delta_theta))
-            norm_g = torch.sqrt(sum(torch.sum(g_i ** 2) for g_i in active_grads))
-            
-            self.cos_sim = (dot_product / (norm_dt * norm_g + 1e-20)).item()
-            # -------------------------------
-            # --- Raise learning rate based on cosine similarity ---
-            # Increases lr if the similarity is positive (up to 2x if perfectly aligned)
+            if self.cossim:
+                # # --- Added Cosine Similarity ---
+                dot_product = sum(torch.sum(dt * g_i) for dt, g_i in zip(delta_theta, active_grads))
+                norm_dt = torch.sqrt(sum(torch.sum(dt ** 2) for dt in delta_theta))
+                norm_g = torch.sqrt(sum(torch.sum(g_i ** 2) for g_i in active_grads))
+                
+                self.cos_sim = (dot_product / (norm_dt * norm_g + 1e-20)).item()
+                # -------------------------------
+                # --- Raise learning rate based on cosine similarity ---
+                # Increases lr if the similarity is positive (up to 2x if perfectly aligned)
 
-            group['lr'] *=  1 + 0.00075 * self.cos_sim  # Scale increase by cosine similarity
-            
+                group['lr'] *=  1 + 0.00075 * self.cos_sim  # Scale increase by cosine similarity
+                
 
-            group['lr'] = min(group['lr'], 0.0005)
+                group['lr'] = min(group['lr'], max_lr)
             # ------------------------------------------------------
             direction = 1 if group["maximize"] else -1
             for p_tensor, dt in zip(active_params, delta_theta):
@@ -506,6 +507,7 @@ def setup_optim(optim: str, args: dict, params: EBM) -> list[Optimizer]:
     if args["scale_lr"]:
         learning_rate /= np.sqrt(params.effective_number_variables)
         max_lr /= np.sqrt(params.effective_number_variables)
+
     if args["optim"] in ["ngd"]:
         if not isinstance(learning_rate, Tensor):
             learning_rate = torch.tensor([learning_rate])
@@ -517,7 +519,8 @@ def setup_optim(optim: str, args: dict, params: EBM) -> list[Optimizer]:
                 update_freq=1, 
                 warm_start=True,
                 maximize=True,
-                update_biases=True,
+                update_biases=False,
+                cossim = True
             )
         ]
     else:
