@@ -61,7 +61,7 @@ def train(
             parallel_chains= sampler.get_conf_grad(batch=None) 
             # loss,deltaE = params.compute_var_gradient(
             
-            loss,deltaE = params.compute_var_gradient(    
+            loss, deltaE = params.compute_var_gradient(
                 J1=j1,
                 J2=j2,
                 chains=parallel_chains,

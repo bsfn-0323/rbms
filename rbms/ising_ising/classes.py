@@ -32,6 +32,7 @@ class IIRBM(RBM):
         hbias: Tensor,
         device: torch.device | str | None = None,
         dtype: torch.dtype | None = None,
+        num_rand_samples: int = 10_000,
     ):
         """Initialize the parameters of the Ising-Ising RBM.
 
@@ -43,6 +44,8 @@ class IIRBM(RBM):
                 Defaults to the device of `weight_matrix`.
             dtype (Optional[torch.dtype], optional): The data type for the parameters.
                 Defaults to the data type of `weight_matrix`.
+            num_rand_samples (int): Size of the pre-generated random Ising configuration
+                buffer used by compute_var_gradient. Defaults to 10_000.
         """
         if device is None:
             device = weight_matrix.device
@@ -55,6 +58,15 @@ class IIRBM(RBM):
         self.hbias = hbias.to(device=self.device, dtype=self.dtype)
         self.name = "IIRBM"
         self.flags = []
+        self._rand_buf_idx: int = 0
+        self.random_chain_buffer: Tensor = (
+            torch.bernoulli(
+                torch.full(
+                    (num_rand_samples, self.num_visibles), 0.5,
+                    device=self.device, dtype=self.dtype,
+                )
+            ) * 2 - 1
+        )
 
     def __add__(self, other):
         return IIRBM(
@@ -132,17 +144,30 @@ class IIRBM(RBM):
             centered=centered,
         )
 
-    def compute_var_gradient(self, J1,J2, chains,eta):
+    def _get_random_chain(self, B: int) -> Tensor:
+        N = self.random_chain_buffer.shape[0]
+        if self._rand_buf_idx + B > N:
+            perm = torch.randperm(N, device=self.random_chain_buffer.device)
+            self.random_chain_buffer = self.random_chain_buffer[perm]
+            self._rand_buf_idx = 0
+        chunk = self.random_chain_buffer[self._rand_buf_idx : self._rand_buf_idx + B]
+        self._rand_buf_idx += B
+        return chunk
+
+    def compute_var_gradient(self, J1, J2, chains, eta):
+        B = chains["visible"].shape[0] 
+        random_chain = self._get_random_chain(B)
         return _compute_var_gradient(
-            J1 = J1,
-            J2 = J2,
+            J1=J1,
+            J2=J2,
             v_chain=chains["visible"],
             h_chain=chains["hidden_mag"],
             w_chain=chains["weights"],
             vbias=self.vbias,
             hbias=self.hbias,
             weight_matrix=self.weight_matrix,
-            eta=eta,
+            l2_reg=eta,
+            random_chain=random_chain,
         )
 
     def independent_model(self):
@@ -261,6 +286,7 @@ class IIRBM(RBM):
         self.weight_matrix = self.weight_matrix.to(device=self.device, dtype=self.dtype)
         self.vbias = self.vbias.to(device=self.device, dtype=self.dtype)
         self.hbias = self.hbias.to(device=self.device, dtype=self.dtype)
+        self.random_chain_buffer = self.random_chain_buffer.to(device=self.device, dtype=self.dtype)
         return self
 
     def get_metrics(self, metrics):

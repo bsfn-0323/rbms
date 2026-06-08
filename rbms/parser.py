@@ -120,6 +120,13 @@ def add_args_init_rbm(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
         help="(Defaults to 1e-05). Initial weight variance."
 
     )
+
+    rbm_args.add_argument(
+        "--L2_effective",
+        default=None,
+        type=float,
+        help="(Defaults to None). Lambda parameter for the L2 regularization on the effective couplings."
+    )
     return parser
 
 

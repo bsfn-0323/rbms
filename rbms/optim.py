@@ -51,143 +51,15 @@ class SGD_cossim(SGD):
             group["lr"] = min(self.max_lr, learning_rate)
             self.prev_grad = curr_grad.clone()
         return super().step(closure)
-
-# class NGD(Optimizer):
-#     def __init__(self, params, lr=0.001, cg_steps=50, init_reg=1, update_freq=1, warm_start=False, maximize=True):
-#         defaults = dict(lr=lr, cg_steps=cg_steps, reg=init_reg, update_freq=update_freq, warm_start=warm_start, maximize=maximize, step=0)
-#         super().__init__(params, defaults)
         
-#         for group in self.param_groups:
-#             for p in group['params']:
-#                 self.state[p]['last_dt'] = torch.zeros_like(p.data)
-    
-#     @torch.no_grad()
-#     def _get_adaptive_reg(self, v_chain, tanh_term, model, base_reg):
-#         B = v_chain.size(0)
-#         v_sq_sum = (v_chain ** 2).sum(dim=1)
-#         t_sq_sum = (tanh_term ** 2).sum(dim=1)
-        
-#         # Only W terms for the trace
-#         mean_norm_s_k_sq = (v_sq_sum * t_sq_sum).mean()
-#         mean_s_w = (v_chain.T @ tanh_term) / B
-#         norm_mean_s_sq = (mean_s_w**2).sum()
-        
-#         trace_F = mean_norm_s_k_sq - norm_mean_s_sq
-#         D = model.weight_matrix.numel() # Only dimension of W
-        
-#         adaptive_reg = base_reg * (trace_F ).item()/D
-
-#         # adaptive_reg = base_reg 
-#         return adaptive_reg
-    
-#     @torch.no_grad()
-#     def _fvp(self, p_list, v_chain, tanh_term, reg):
-#         # Unpack parameters based on model.parameters() ordering: 
-#         # (weight_matrix, vbias, hbias)
-#         p_w, p_v, p_h = p_list
-            
-#         O_dot_p = ((v_chain @ p_w) * tanh_term).sum(dim=1) + \
-#                   (v_chain @ p_v) + \
-#                   (tanh_term @ p_h)
-                  
-#         O_dot_p_c = O_dot_p - O_dot_p.mean()
-        
-#         B = v_chain.size(0)
-        
-#         Sx_w = (v_chain.T @ (tanh_term * O_dot_p_c.unsqueeze(1))) / B
-#         Sx_v = (v_chain.T @ O_dot_p_c) / B
-#         Sx_h = (tanh_term.T @ O_dot_p_c) / B
-                
-#         return [Sx_w + reg * p_w, Sx_v + reg * p_v, Sx_h + reg * p_h]
-
-#     @torch.no_grad()
-#     def step(self, v_chain, model, scale=1, closure=None): # <-- Added 'model' back
-#         for group in self.param_groups:
-#             group["step"] += 1
-#             params = group["params"]
-#             lr = group["lr"]
-#             # reg = scale * group["reg"]
-#             g = [p.grad.clone() for p in params]
-            
-#             if group["step"] % group["update_freq"] == 0 or group["step"] == 1:
-                
-#                 # Use 'model' directly from the argument
-#                 grad_v, grad_h, _ = model.compute_energy_visible_gradient(v_chain)
-                
-#                 v_chain_eff = -grad_v
-#                 tanh_term = -grad_h
-#                 self.reg = scale*self._get_adaptive_reg(v_chain, tanh_term, model, group["reg"])
-                
-#                 if group["warm_start"] and group["step"] > 1:
-#                     # Warm Start: Initialize with previous Natural Gradient
-#                     delta_theta = [self.state[p]['last_dt'].clone() for p in params]
-#                     S_dt = self._fvp(delta_theta, v_chain_eff, tanh_term, self.reg)
-#                     residual = [g_i - s_i for g_i, s_i in zip(g, S_dt)]
-#                 else:
-#                     # Cold Start
-#                     delta_theta = [torch.zeros_like(p) for p in params]
-#                     residual = [g_i.clone() for g_i in g]
-                    
-#                 p_vec = [r_i.clone() for r_i in residual]
-#                 r_dot_r = sum(torch.sum(r * r) for r in residual)
-#                 initial_r_norm = torch.sqrt(r_dot_r).item() + 1e-8
-#                 current_r_norm = initial_r_norm
-#                 self.cg_step = 0
-                
-#                 # Keep looping while the relative error is larger than the tolerance
-#                 while (current_r_norm / initial_r_norm) > 0.001:
-#                 # for _ in range(group["cg_steps"]):
-#                     if self.cg_step >= group["cg_steps"]:
-#                         break
-                        
-#                     S_p = self._fvp(p_vec, v_chain_eff, tanh_term, self.reg)
-#                     p_Sp = sum(torch.sum(pv * spv) for pv, spv in zip(p_vec, S_p))
-                    
-#                     if p_Sp.item() <= 1e-20:
-#                         print(f"Broke: {p_Sp.item()}")
-#                         break
-                        
-#                     alpha = (r_dot_r / p_Sp).item()
-                    
-#                     for dt, pv in zip(delta_theta, p_vec):
-#                         dt.add_(pv, alpha=alpha)
-                        
-#                     for r, spv in zip(residual, S_p):
-#                         r.sub_(spv, alpha=alpha)
-                    
-#                     new_r_dot_r = sum(torch.sum(r * r) for r in residual)
-#                     current_r_norm = torch.sqrt(new_r_dot_r).item()
-                    
-#                     if new_r_dot_r.item() < 1e-20:
-#                         print(f"Broke: {new_r_dot_r.item()}")
-#                         break
-                        
-#                     beta = (new_r_dot_r / r_dot_r).item()
-                    
-#                     for pv, r in zip(p_vec, residual):
-#                         pv.mul_(beta).add_(r)
-                        
-#                     r_dot_r = new_r_dot_r
-#                     self.cg_step += 1
-                
-#                 # Save the Natural Gradient for the next warm start
-#                 for p_tensor, dt in zip(params, delta_theta):
-#                     if p_tensor is model.weight_matrix: # <-- Check against 'model.weight_matrix'
-#                         self.state[p_tensor]['last_dt'].copy_(dt)
-#             else:
-#                 delta_theta = g
-                
-#             direction = 1 if group["maximize"] else -1
-#             for p_tensor, dt in zip(params, delta_theta):
-#                 if p_tensor is model.weight_matrix: # <-- Check against 'model.weight_matrix'
-#                     p_tensor.add_(dt, alpha=direction * lr)
-
 class NGD(Optimizer):
     # Added 'update_biases=True' flag to the initialization
-    def __init__(self, params, lr=0.001, cg_steps=20, init_reg=1, update_freq=1, warm_start=False, maximize=True, update_biases=True,cossim=False):
+    def __init__(self, params, lr=0.001, cg_steps=20, init_reg=1, update_freq=1, warm_start=False, maximize=True, update_biases=True, cossim=False, l2_reg=0.0, n_unif=None):
         defaults = dict(lr=lr, cg_steps=cg_steps, reg=init_reg, update_freq=update_freq, warm_start=warm_start, maximize=maximize, update_biases=update_biases, step=0)
         super().__init__(params, defaults)
         self.cossim = cossim
+        self.lambda_eff = l2_reg
+        self.n_unif = n_unif
         for group in self.param_groups:
             for p in group['params']:
                 self.state[p]['last_dt'] = torch.zeros_like(p.data)
@@ -248,7 +120,6 @@ class NGD(Optimizer):
             return [Sx_w + reg * p_w, Sx_v + reg * p_v, Sx_h + reg * p_h]
         else:
             return [Sx_w + reg * p_w]
-
     @torch.no_grad()
     def step(self, v_chain, model, scale=1, closure=None): 
         for group in self.param_groups:
@@ -340,154 +211,49 @@ class NGD(Optimizer):
                 dot_product = sum(torch.sum(dt * g_i) for dt, g_i in zip(delta_theta, active_grads))
                 norm_dt = torch.sqrt(sum(torch.sum(dt ** 2) for dt in delta_theta))
                 norm_g = torch.sqrt(sum(torch.sum(g_i ** 2) for g_i in active_grads))
-                
+
                 self.cos_sim = (dot_product / (norm_dt * norm_g + 1e-20)).item()
                 # -------------------------------
                 # --- Raise learning rate based on cosine similarity ---
                 # Increases lr if the similarity is positive (up to 2x if perfectly aligned)
 
-                group['lr'] *=  1 + 0.00075 * self.cos_sim  # Scale increase by cosine similarity
-                
+                group['lr'] *=  1 + 0.005 * self.cos_sim  # Scale increase by cosine similarity
+
 
                 group['lr'] = min(group['lr'], max_lr)
             # ------------------------------------------------------
+
+            # --- ℓ2 regularization of effective-coupling space ---
+            # Penalty R = (λ/2) Var_u[E], gradient ∇_θ R = λ Cov_u(∂_θ E, E).
+            # We subtract ∇R from delta_theta (un-preconditioned, after CG) so that
+            # the net parameter update descends on R and Var_u[E] decreases.
+            # Uniform samples come from the model's pre-allocated buffer (Ising ±1).
+            if self.lambda_eff != 0.0:
+                n_u = self.n_unif if self.n_unif is not None else v_chain.size(0)
+                ridx = torch.randint(0, model.random_chain_buffer.size(0), (n_u,), device=model.device)
+                v_unif = model.random_chain_buffer[ridx]
+                E_unif = model.compute_energy_visibles(v_unif)
+                E_c = E_unif - E_unif.mean()                            # (n_u,)
+                tanh_u = torch.tanh(model.hbias + v_unif @ model.weight_matrix)  # (n_u, N_h)
+                for i, p_tensor in enumerate(active_params):
+                    if p_tensor is model.weight_matrix:
+                        # Cov_u(∂_W E, E) = -(v_unif.T @ (tanh_u * E_c[:,None])) / n_u
+                        g_reg = self.lambda_eff * ((v_unif.T @ (tanh_u * E_c.unsqueeze(1))) / n_u)
+                        delta_theta[i] = delta_theta[i] + g_reg
+                    elif update_biases and p_tensor is model.vbias:
+                        # Cov_u(∂_vbias E, E) = -(v_unif.T @ E_c) / n_u
+                        g_reg = self.lambda_eff * ((v_unif.T @ E_c) / n_u)
+                        delta_theta[i] = delta_theta[i] + g_reg
+                    elif update_biases and p_tensor is model.hbias:
+                        # Cov_u(∂_hbias E, E) = -(tanh_u.T @ E_c) / n_u
+                        g_reg = self.lambda_eff * ((tanh_u.T @ E_c) / n_u)
+                        delta_theta[i] = delta_theta[i] + g_reg
+            # -----------------------------------------------------
+
             direction = 1 if group["maximize"] else -1
             for p_tensor, dt in zip(active_params, delta_theta):
                 p_tensor.add_(dt, alpha=direction * group['lr'])
 
-
-# class SR_CG(Optimizer):
-#     def __init__(self, params, lr=0.001, cg_steps=10, init_reg=1, update_freq=1, warm_start=True, maximize=True):
-#         defaults = dict(lr=lr, cg_steps=cg_steps, reg=init_reg, update_freq=update_freq, warm_start=warm_start, maximize=maximize, step=0)
-#         super().__init__(params, defaults)
-        
-#         # Initialize state memory for warm starts
-#         for group in self.param_groups:
-#             for p in group['params']:
-#                 self.state[p]['last_dt'] = torch.zeros_like(p.data)
-
-#     @torch.no_grad()
-#     def _fvp(self, p_list, v_chain, tanh_term, model, reg, params):
-#         p_dict = {}
-#         for p_tensor, param_ref in zip(p_list, params):
-#             if param_ref is model.weight_matrix: p_dict['w'] = p_tensor
-#             elif param_ref is model.vbias: p_dict['v'] = p_tensor
-#             elif param_ref is model.hbias: p_dict['h'] = p_tensor
-            
-#         O_dot_p = ((v_chain @ p_dict['w']) * tanh_term).sum(dim=1) + \
-#                   (v_chain @ p_dict['v']) + \
-#                   (tanh_term @ p_dict['h'])
-                  
-#         O_dot_p_c = O_dot_p - O_dot_p.mean()
-        
-#         B = v_chain.size(0)
-        
-#         Sx_w = (v_chain.T @ (tanh_term * O_dot_p_c.unsqueeze(1))) / B
-#         Sx_v = (v_chain.T @ O_dot_p_c) / B
-#         Sx_h = (tanh_term.T @ O_dot_p_c) / B
-        
-#         Sx_list = []
-#         for p_tensor, param_ref in zip(p_list, params):
-#             if param_ref is model.weight_matrix:
-#                 Sx_list.append(Sx_w + reg * p_tensor)
-#             elif param_ref is model.vbias:
-#                 Sx_list.append(Sx_v + reg * p_tensor)
-#             elif param_ref is model.hbias:
-#                 Sx_list.append(Sx_h + reg * p_tensor)
-                
-#         return Sx_list
-    
-#     @torch.no_grad()
-#     def _get_adaptive_reg(self, v_chain, tanh_term, model, base_reg, scale):
-#         B = v_chain.size(0)
-#         v_sq_sum = (v_chain ** 2).sum(dim=1)
-#         t_sq_sum = (tanh_term ** 2).sum(dim=1)
-        
-#         # Only W terms for the trace
-#         mean_norm_s_k_sq = (v_sq_sum * t_sq_sum).mean()
-#         mean_s_w = (v_chain.T @ tanh_term) / B
-#         norm_mean_s_sq = (mean_s_w**2).sum()
-        
-#         trace_F = mean_norm_s_k_sq - norm_mean_s_sq
-#         D = model.weight_matrix.numel() # Only dimension of W
-        
-#         adaptive_reg = base_reg * (trace_F ).item()/D
-
-#         # adaptive_reg = base_reg 
-#         return np.minimum(scale * adaptive_reg, 500.0)
-    
-#     @torch.no_grad()
-#     def step(self, v_chain, model,scale=1, closure=None):
-#         for group in self.param_groups:
-#             group["step"] += 1
-#             params = group["params"]
-#             lr = group["lr"]
-#             self.reg = np.minimum(scale*group["reg"],500.0)
-#             M=float(model.weight_matrix.shape[0])
-#             g = [p.grad.clone() for p in params]
-            
-#             # Lazy Preconditioning: Only run CG every 'update_freq' steps
-#             if group["step"] % group["update_freq"] == 0 or group["step"] == 1:
-                
-#                 local_field = model.hbias + v_chain @ model.weight_matrix
-#                 # tanh_term = torch.tanh(local_field)
-#                 tanh_term = local_field/M
-#                 # Clean, single call before the CG loop
-#                 self.reg = self._get_adaptive_reg(v_chain, tanh_term, model, group["reg"], scale)
-                
-#                 if group["warm_start"] and group["step"] > 1:
-#                     # Warm Start: Initialize with previous Natural Gradient
-#                     delta_theta = [self.state[p]['last_dt'].clone() for p in params]
-#                     S_dt = self._fvp(delta_theta, v_chain, tanh_term, model, self.reg, params)
-#                     residual = [g_i - s_i for g_i, s_i in zip(g, S_dt)]
-#                 else:
-#                     # Cold Start
-#                     delta_theta = [torch.zeros_like(p) for p in params]
-#                     residual = [g_i.clone() for g_i in g]
-                    
-#                 p_vec = [r_i.clone() for r_i in residual]
-#                 r_dot_r = sum(torch.sum(r * r) for r in residual)
-                
-#                 for _ in range(group["cg_steps"]):
-#                     S_p = self._fvp(p_vec, v_chain, tanh_term, model, self.reg, params)
-#                     p_Sp = sum(torch.sum(pv * spv) for pv, spv in zip(p_vec, S_p))
-                    
-#                     if p_Sp.item() <= 1e-8:
-#                         break
-                        
-#                     alpha = (r_dot_r / p_Sp).item()
-                    
-#                     for dt, pv in zip(delta_theta, p_vec):
-#                         dt.add_(pv, alpha=alpha)
-                        
-#                     for r, spv in zip(residual, S_p):
-#                         r.sub_(spv, alpha=alpha)
-                    
-#                     new_r_dot_r = sum(torch.sum(r * r) for r in residual)
-                    
-#                     if new_r_dot_r.item() < 1e-6:
-#                         break
-                        
-#                     beta = (new_r_dot_r / r_dot_r).item()
-                    
-#                     for pv, r in zip(p_vec, residual):
-#                         pv.mul_(beta).add_(r)
-                        
-#                     r_dot_r = new_r_dot_r
-                
-#                 # Save the Natural Gradient for the next warm start
-#                 for p_tensor, dt in zip(params, delta_theta):
-#                     if p_tensor is model.weight_matrix:
-#                         self.state[p_tensor]['last_dt'].copy_(dt)
-#             else:
-#                 # Fallback: Standard Gradient Update for intermediate steps
-#                 delta_theta = g
-#             # Apply the update
-#             direction = 1 if group["maximize"] else -1
-#             for p_tensor, dt in zip(params, delta_theta):
-#                 #only if it is the weight_matrix
-#                 if p_tensor is model.weight_matrix:
-#                     p_tensor.add_(dt, alpha=direction * lr)
 
 def setup_optim(optim: str, args: dict, params: EBM) -> list[Optimizer]:
     match args["optim"]:
@@ -519,8 +285,9 @@ def setup_optim(optim: str, args: dict, params: EBM) -> list[Optimizer]:
                 update_freq=1, 
                 warm_start=True,
                 maximize=True,
-                update_biases=False,
-                cossim = True
+                update_biases=True,
+                cossim = True,
+                l2_reg = args["L2_effective"]
             )
         ]
     else:

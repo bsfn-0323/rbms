@@ -136,55 +136,57 @@ def _compute_var_gradient(
     vbias: Tensor,
     hbias: Tensor,
     weight_matrix: Tensor,
-    eta: float,
+    l2_reg: float,
+    random_chain: Tensor | None = None,
 ) -> float:
     
     B = v_chain.size(0)
-    
-    # 1. Compute energies and local fields
-    betaH = _compute_hamiltonian(v_chain, J1, J2)
-    local_field = hbias + (v_chain @ weight_matrix)
-    tanh_term = torch.tanh(local_field)
-    F = _compute_energy_visibles(v_chain, vbias, hbias, weight_matrix)
-    deltaE = -betaH + F
-    
-    # 2. THE CENTERING TRICK
-    # Cov(X, Y) = E[X * (Y - E[Y])]. By centering the scalars first, 
-    # we bypass calculating the mean of the massive gradient tensors entirely.
-    deltaE_c = (deltaE - deltaE.mean()).view(-1, 1)  # Shape: (B, 1)
-    # F_c = (F - F.mean()).view(-1, 1)                 # Shape: (B, 1)
-    
-    # 3. OPTIMIZED WEIGHT GRADIENTS (Pure 2D Matrix Multiplication)
-    # v_chain.T is (N_v, B). tanh_term * deltaE_c is (B, N_h).
-    # The @ operator resolves to a highly optimized cuBLAS routine.
-    grad_weight_matrix = (v_chain.T @ (tanh_term * deltaE_c)) / B
-    # entropy_weight_matrix = (v_chain.T @ (tanh_term * F_c)) / B
-    
-    # 4. OPTIMIZED BIAS GRADIENTS
-    # Broadcasting takes care of the element-wise multiplication before the mean
-    # grad_hbias = (tanh_term * deltaE_c).mean(dim=0)
-    # entropy_hbias = (tanh_term * F_c).mean(dim=0)
 
-    # grad_vbias = (v_chain * deltaE_c).mean(dim=0)
-    # entropy_vbias = (v_chain * F_c).mean(dim=0)
-    
-    # 5. DYNAMIC GAMMA CALCULATION
-    # norm_grad = grad_weight_matrix.norm()
-    # norm_grad_ent = entropy_weight_matrix.norm()
-    
-    random_chain = torch.bernoulli(torch.full_like(v_chain, 0.5)) * 2 - 1
-    random_chain = random_chain.to(device=v_chain.device, dtype=v_chain.dtype)
+    if random_chain is None:
+        random_chain = torch.bernoulli(torch.full_like(v_chain, 0.5)) * 2 - 1
+        random_chain = random_chain.to(device=v_chain.device, dtype=v_chain.dtype)
+
+    # 1. Compute target model energies
+    betaH = _compute_hamiltonian(v_chain, J1, J2)
+
     grad_F_v,grad_F_h,_ = _compute_energy_visibles_gradient(
-        v=random_chain,
+        v=v_chain,
         vbias=vbias,
         hbias=hbias,
         weight_matrix=weight_matrix,
     )
-    F_centered = F - F.mean() # (B,)
+    F = _compute_energy_visibles(v_chain, vbias, hbias, weight_matrix)
+
+    # local_field = hbias + (v_chain @ weight_matrix)
+    # tanh_term = torch.tanh(local_field)
+    
+    # F_uniform = _compute_energy_visibles(random_chain, vbias, hbias, weight_matrix)
+    deltaE = -betaH + F
+    
+    # 2. THE CENTERING TRICK
+    deltaE_c = (deltaE - deltaE.mean()).view(-1, 1)  # Shape: (B, 1)
+    
+    # 3. OPTIMIZED WEIGHT GRADIENTS (Pure 2D Matrix Multiplication)
+    grad_weight_matrix = (grad_F_v.T @ (grad_F_h * deltaE_c)) / B
+    
+    # 4. OPTIMIZED BIAS GRADIENTS
+    # Broadcasting takes care of the element-wise multiplication before the mean
+    grad_hbias = -(grad_F_h * deltaE_c).mean(dim=0)
+    grad_vbias = -(grad_F_v * deltaE_c).mean(dim=0)
+
+    # grad_F_v_u,grad_F_h_u,_ = _compute_energy_visibles_gradient(
+    #     v=random_chain,
+    #     vbias=vbias,
+    #     hbias=hbias,
+    #     weight_matrix=weight_matrix,
+    # )
+    # F_centered = F_uniform - F_uniform.mean() # (B,)
     # Since F_centered sums to zero, centering grad_F_weight_matrix across the
     # batch contributes nothing to the contraction below, so we skip building
     # the (B, N_v, N_h) outer-product tensor and contract via two matmuls.
-    l2_weight_matrix = -(grad_F_v * F_centered[:, None]).T @ grad_F_h / B
+    # l2_weight_matrix = (grad_F_v * F_centered[:, None]).T @ grad_F_h / B
+    # l2_vbias = -grad_F_v.T @ F_centered / B
+    # l2_hbias = -grad_F_h.T @ F_centered / B 
 
 
     # Added 1e-8 epsilon to prevent division by zero in the first step
@@ -194,12 +196,20 @@ def _compute_var_gradient(
 
     
     # 6. ATTACH GRADIENTS
-    weight_matrix.grad = grad_weight_matrix +1e-04*l2_weight_matrix
-    # vbias.grad = grad_vbias + gamma * entropy_vbias
-    # hbias.grad = grad_hbias + gamma * entropy_hbias
-    vbias.grad = torch.zeros(weight_matrix.shape[0],device = weight_matrix.grad.device)  # Zero out the visible bias gradient to prevent updates
-    hbias.grad = torch.zeros(weight_matrix.shape[1],device = weight_matrix.grad.device)  # Zero out the hidden bias gradient to prevent updates
-    # The variance loss simplifies neatly with the centered deltaE
+    # Only the KL gradient goes into .grad so that a natural-gradient optimizer
+    # (which applies F^{-1} built from p_rbm statistics) does not inadvertently
+    # precondition the variance term, whose geometry lives under the uniform measure.
+    weight_matrix.grad = grad_weight_matrix
+    vbias.grad = grad_vbias
+    hbias.grad = grad_hbias
+
+    # Variance regularization gradients returned separately; the caller must add
+    # them to the parameter update *after* any natural-gradient step.
+    # var_grads = (
+    #     l2_reg * l2_weight_matrix,   # ascent direction for W
+    #     l2_reg * l2_vbias,            # ascent direction for vbias
+    #     l2_reg * l2_hbias,            # ascent direction for hbias
+    # )
     return loss.item(), deltaE
 
 def _compute_hamiltonian(
@@ -208,11 +218,6 @@ def _compute_hamiltonian(
     field = v@J1
     interaction = ((v @ J2) * v).sum(1)
     return -field - 0.5*interaction
-
-# def _compute_local_field(
-#     v:Tensor, J1: Tensor, J2: Tensor
-# ) -> Tensor:
-#     return  -v@J2 - J1
 
 def _init_chains(
     num_samples: int,

@@ -197,7 +197,7 @@ def main(args, map_model=map_model):
         num_updates=args["num_updates"],
         filename=args["filename"],
         variational=args["variational"],
-        eta=args["var_init"]
+        eta=args["L2_effective"]
     )
 
 
