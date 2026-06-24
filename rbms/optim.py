@@ -128,7 +128,7 @@ class NGD(Optimizer):
             params = group["params"]
             # lr = group["lr"]
             update_biases = group["update_biases"]
-            max_lr = 0.1/model.weight_matrix.numel()**0.5
+            max_lr = 0.05/model.weight_matrix.numel()**0.5
             g = [p.grad.clone() for p in params]
             
             if group["step"] % group["update_freq"] == 0 or group["step"] == 1:
@@ -290,7 +290,7 @@ def setup_optim(optim: str, args: dict, params: EBM) -> list[Optimizer]:
                 warm_start=True,
                 maximize=True,
                 update_biases=False,
-                cossim = True,
+                cossim = False,
                 adaptive_reg = False,
                 l2_reg = args["L2_effective"]
             )
