@@ -52,10 +52,11 @@ def main(args, map_model=map_model):
         #load J1 J2
         temp = args['vartemp']
         J1 = torch.from_numpy(np.load(args["j1"])).to(args["dtype"]).to(args["device"]) if args["j1"] is not None else torch.zeros(args["num_visibles"]).to(args["dtype"]).to(args["device"])
-        J2 = torch.from_numpy(np.load(args["j2"])).to(args["dtype"]).to(args["device"]) if args["j2"] is not None else torch.zeros(args["num_visibles"],args["num_visibles"]).to(args["dtype"]).to(args["device"])
+        J2 = torch.from_numpy(np.load(args["j2"])).to(args["dtype"]).to(args["device"]) if args["j2"] is not None else torch.ones(args["num_visibles"],args["num_visibles"]).to(args["dtype"]).to(args["device"])
         J1 = J1/temp
         J2 = J2/temp
-        J3 = torch.from_numpy(np.load(args["j3"])).to(args["dtype"]).to(args["device"])/temp if args["j3"] is not None else None
+        J3 = torch.from_numpy(np.load(args["j3"])).to(args["dtype"]).to(args["device"]) if args["j3"] is not None else torch.ones(args["num_visibles"],args["num_visibles"],args["num_visibles"]).to(args["dtype"]).to(args["device"])
+        J3 = J3/temp
         print(f"J1: {J1}")
         print(f"J2: {J2}")
         if J3 is not None:

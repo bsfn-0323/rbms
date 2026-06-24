@@ -162,7 +162,7 @@ class NGD(Optimizer):
 
     @torch.no_grad()
     def step(self, closure=None):
-        max_lr = 50/math.sqrt(self.model.weight_matrix.numel()) # Cap learning rate to prevent divergence on large models
+        max_lr = 1/math.sqrt(self.model.weight_matrix.numel()) # Cap learning rate to prevent divergence on large models
         end = None
         if closure is not None:
             with torch.enable_grad():
@@ -254,13 +254,13 @@ class NGD(Optimizer):
                 delta = active_grads
 
             # Cosine similarity between natural gradient and raw gradient
-            dot = sum((d * g_i).sum() for d, g_i in zip(delta, active_grads))
-            norm_d = sum(d.square().sum() for d in delta).sqrt()
-            norm_g = sum(g_i.square().sum() for g_i in active_grads).sqrt()
-            self.cos_sim = (dot / (norm_d * norm_g + 1e-20)).item()
+            # dot = sum((d * g_i).sum() for d, g_i in zip(delta, active_grads))
+            # norm_d = sum(d.square().sum() for d in delta).sqrt()
+            # norm_g = sum(g_i.square().sum() for g_i in active_grads).sqrt()
+            # self.cos_sim = (dot / (norm_d * norm_g + 1e-20)).item()
 
-            group["lr"] *=1.0 + 0.00075*self.cos_sim # Scale learning rate by cosine similarity
-            group["lr"] = min(group["lr"], max_lr)
+            # group["lr"] *=1.0 + 0.00075*self.cos_sim # Scale learning rate by cosine similarity
+            # group["lr"] = min(group["lr"], max_lr)
             sign = 1 if group["maximize"] else -1
             for p_tensor, d in zip(active_params, delta):
                 p_tensor.add_(d, alpha=sign * group["lr"])

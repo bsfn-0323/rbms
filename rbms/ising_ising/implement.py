@@ -186,12 +186,13 @@ def _compute_hamiltonian(
     v:Tensor, J1: Tensor, J2:Tensor, J3:Tensor 
 ) -> Tensor:
     field = v@J1
-    interaction = ((v @ J2) * v).sum(1)
-    if J3 is not None:
+    # interaction = ((v @ J2) * v).sum(1)
+    interaction = (J2.max() * v * torch.roll(v, -1, dims=-1)).sum(-1)
+    # if J3 is not None:
         # interaction_3 = torch.einsum("bi,bj,bk,ijk->b", v,v,v,J3)
-        interaction_3= (J3.max()*  v * torch.roll(v, -1, dims=-1) * torch.roll(v, -2, dims=-1)).sum(-1)
-    else:
-        interaction_3 = 0.0
+    interaction_3= (J3.max()* v * torch.roll(v, -1, dims=-1) * torch.roll(v, -2, dims=-1)).sum(-1)
+    # else:
+    #     interaction_3 = 0.0
     return -field - 0.5*interaction - interaction_3
 
 def _init_chains(
