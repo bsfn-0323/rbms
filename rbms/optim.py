@@ -72,7 +72,7 @@ class NGD(Optimizer):
         model: EBM,
         lr: float = 0.001,
         cg_steps: int = 20,
-        init_reg: float = 1.0,
+        init_reg: float = 1e-08,
         update_freq: int = 1,
         warm_start: bool = False,
         maximize: bool = True,
@@ -186,7 +186,8 @@ class NGD(Optimizer):
                 grad_v, grad_h, _ = self.model.compute_energy_visible_gradient(v_chain)
                 v_eff = -grad_v
                 tau = -grad_h
-                self.reg = scale * self._adaptive_reg(v_eff, tau, group["reg"])
+                # self.reg = scale * self._adaptive_reg(v_eff, tau, group["reg"])
+                self.reg = group['reg']
 
                 if update_biases:
                     active_params, active_grads = params, g
