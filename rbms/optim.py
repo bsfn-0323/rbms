@@ -54,12 +54,13 @@ class SGD_cossim(SGD):
         
 class NGD(Optimizer):
     # Added 'update_biases=True' flag to the initialization
-    def __init__(self, params, lr=0.001, cg_steps=20, init_reg=1, update_freq=1, warm_start=False, maximize=True, update_biases=True, cossim=False, l2_reg=0.0, n_unif=None):
-        defaults = dict(lr=lr, cg_steps=cg_steps, reg=init_reg, update_freq=update_freq, warm_start=warm_start, maximize=maximize, update_biases=update_biases, step=0)
+    def __init__(self, params, lr=0.001, cg_steps=30, init_reg=1e-8, alpha=1e-3, update_freq=1, warm_start=False, maximize=True, update_biases=True, cossim=False, l2_reg=0.0, n_unif=None, adaptive_reg=False):
+        defaults = dict(lr=lr, cg_steps=cg_steps, reg=init_reg, alpha=alpha, update_freq=update_freq, warm_start=warm_start, maximize=maximize, update_biases=update_biases, step=0)
         super().__init__(params, defaults)
         self.cossim = cossim
         self.lambda_eff = l2_reg
         self.n_unif = n_unif
+        self.adaptive_reg = adaptive_reg
         for group in self.param_groups:
             for p in group['params']:
                 self.state[p]['last_dt'] = torch.zeros_like(p.data)
@@ -127,7 +128,7 @@ class NGD(Optimizer):
             params = group["params"]
             # lr = group["lr"]
             update_biases = group["update_biases"]
-            max_lr = 10/model.weight_matrix.numel()**0.5
+            max_lr = 0.1/model.weight_matrix.numel()**0.5
             g = [p.grad.clone() for p in params]
             
             if group["step"] % group["update_freq"] == 0 or group["step"] == 1:
@@ -135,8 +136,11 @@ class NGD(Optimizer):
                 
                 v_chain_eff = -grad_v
                 tanh_term = -grad_h
-                self.reg = scale * self._get_adaptive_reg(v_chain, tanh_term, model, group["reg"])
-                
+                if self.adaptive_reg:
+                    adaptive_term = scale * self._get_adaptive_reg(v_chain, tanh_term, model, group["alpha"])
+                    self.reg = max(adaptive_term, group["reg"])
+                else:
+                    self.reg = group["reg"]
                 # FLAG LOGIC: Filter parameters fed to the Conjugate Gradient solver
                 if update_biases:
                     active_params = params
@@ -164,11 +168,11 @@ class NGD(Optimizer):
                 current_r_norm = initial_r_norm
                 self.cg_step = 0
                 
-                # while (current_r_norm / initial_r_norm) > 0.0001:
-                #     if self.cg_step >= group["cg_steps"]:
-                #         # print("CG broke due to reaching max iterations.")
-                #         break
-                for _ in range(group["cg_steps"]):
+                while (current_r_norm / initial_r_norm) > 0.01:
+                    if self.cg_step >= group["cg_steps"]:
+                        # print("CG broke due to reaching max iterations.")
+                        break
+                # for _ in range(group["cg_steps"]):
                     S_p = self._fvp(p_vec, v_chain_eff, tanh_term, self.reg, update_biases)
                     p_Sp = sum(torch.sum(pv * spv) for pv, spv in zip(p_vec, S_p))
                     
@@ -285,8 +289,9 @@ def setup_optim(optim: str, args: dict, params: EBM) -> list[Optimizer]:
                 update_freq=1, 
                 warm_start=True,
                 maximize=True,
-                update_biases=True,
+                update_biases=False,
                 cossim = True,
+                adaptive_reg = False,
                 l2_reg = args["L2_effective"]
             )
         ]

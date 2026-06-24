@@ -109,21 +109,21 @@ def _compute_var_gradient(
     
     # 4. OPTIMIZED BIAS GRADIENTS
     # Broadcasting takes care of the element-wise multiplication before the mean
-    grad_hbias = inv_M*(local_field * deltaE_c).mean(dim=0)
-    entropy_hbias = (local_field * F_c).mean(dim=0)
+    # grad_hbias = inv_M*(local_field * deltaE_c).mean(dim=0)
+    # entropy_hbias = (local_field * F_c).mean(dim=0)
 
-    grad_vbias = (v_chain * deltaE_c).mean(dim=0)
-    entropy_vbias = (v_chain * F_c).mean(dim=0)
+    # grad_vbias = (v_chain * deltaE_c).mean(dim=0)
+    # entropy_vbias = (v_chain * F_c).mean(dim=0)
     
     # 5. DYNAMIC GAMMA CALCULATION
-    norm_grad = grad_weight_matrix.norm()
-    norm_grad_ent = entropy_weight_matrix.norm()
-    target_percentage = eta
+    # norm_grad = grad_weight_matrix.norm()
+    # norm_grad_ent = entropy_weight_matrix.norm()
+    # target_percentage = eta
     
     # Added 1e-8 epsilon to prevent division by zero in the first step
     loss = 0.5 * (deltaE_c**2).mean()
 
-    gamma = (norm_grad * target_percentage) / (norm_grad_ent + 1e-8)
+    # gamma = (norm_grad * target_percentage) / (norm_grad_ent + 1e-8)
 
     
     # 6. ATTACH GRADIENTS
@@ -133,7 +133,7 @@ def _compute_var_gradient(
     vbias.grad = torch.zeros_like(vbias)
     hbias.grad = torch.zeros_like(hbias)
     # The variance loss simplifies neatly with the centered deltaE
-    return loss.item()
+    return loss.item(), deltaE
 
 def _compute_gradient(
     v_data: Tensor,

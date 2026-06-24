@@ -123,7 +123,7 @@ def add_args_init_rbm(parser: argparse.ArgumentParser) -> argparse.ArgumentParse
 
     rbm_args.add_argument(
         "--L2_effective",
-        default=None,
+        default=0.0,
         type=float,
         help="(Defaults to None). Lambda parameter for the L2 regularization on the effective couplings."
     )

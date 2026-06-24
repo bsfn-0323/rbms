@@ -13,7 +13,7 @@ from rbms.const import LOG_FILE_HEADER
 from rbms.ising_ising.classes import IIRBM
 
 
-def get_eigenvalues_history(filename: str, backend="cpu",every = 1):
+def get_eigenvalues_history(filename: str, backend="cpu",every = 1,max=None,scheduler=None):
     """
     Extracts the history of eigenvalues of the RBM's weight matrix.
 
@@ -27,7 +27,11 @@ def get_eigenvalues_history(filename: str, backend="cpu",every = 1):
     """
     saved_updates = get_saved_updates(filename)
     eigenvalues = []
-    for upd in saved_updates[::every]:
+    if max is None:
+        max = len(saved_updates)
+    if scheduler is not None:
+        saved_updates = saved_updates[scheduler]
+    for upd in saved_updates[:max:every]:
         compute = False
         with h5py.File(filename, "a") as f:
             if "singular_values" not in f[f"update_{upd}"]:

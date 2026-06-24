@@ -53,6 +53,8 @@ def main(args, map_model=map_model):
         temp = args['vartemp']
         J1 = torch.from_numpy(np.load(args["j1"])).to(args["dtype"]).to(args["device"]) if args["j1"] is not None else torch.zeros(args["num_visibles"]).to(args["dtype"]).to(args["device"])
         J2 = torch.from_numpy(np.load(args["j2"])).to(args["dtype"]).to(args["device"]) if args["j2"] is not None else torch.zeros(args["num_visibles"],args["num_visibles"]).to(args["dtype"]).to(args["device"])
+        diag = 4*torch.eye(J2.size(0), device=J2.device, dtype=J2.dtype)
+
         J1 = J1/temp
         J2 = J2/temp
         num_visibles = args["num_visibles"]

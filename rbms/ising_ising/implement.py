@@ -200,8 +200,10 @@ def _compute_var_gradient(
     # (which applies F^{-1} built from p_rbm statistics) does not inadvertently
     # precondition the variance term, whose geometry lives under the uniform measure.
     weight_matrix.grad = grad_weight_matrix
-    vbias.grad = grad_vbias
-    hbias.grad = grad_hbias
+    # vbias.grad = grad_vbias
+    # hbias.grad = grad_hbias
+    vbias.grad = torch.zeros_like(vbias)
+    hbias.grad = torch.zeros_like(hbias)
 
     # Variance regularization gradients returned separately; the caller must add
     # them to the parameter update *after* any natural-gradient step.
