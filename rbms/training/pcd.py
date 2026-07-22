@@ -152,6 +152,7 @@ def train(
             if isinstance(optimizer[0], NGD):
                 pbar.write(f"scale : {opt.reg:.3g}")
                 pbar.write(f"cg steps: {opt.cg_step}")
+                pbar.write(f"epsilon : {opt.epsilon}")
 
             if variational:
                 pbar.write("loss : ")

@@ -50,7 +50,7 @@ def _compute_energy_visibles(
     field = v @ vbias
     t = hbias + (v @ weight_matrix)
     quad_term = 0.5 * (t * t).sum(1) / float(weight_matrix.shape[0])
-    return -field - quad_term + const
+    return -field - quad_term - const
 
 
 def _compute_energy_hiddens(

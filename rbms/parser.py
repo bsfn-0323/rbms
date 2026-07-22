@@ -185,6 +185,12 @@ def add_grad_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
 def add_args_train(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     train_args = parser.add_argument_group("Train")
     train_args.add_argument(
+        "--ngd_cossim",
+        action="store_true",
+        default=False,
+        help="(Defaults to False). Use NGD with cosine similarity.",
+    )
+    train_args.add_argument(
         "--batch_size",
         type=int,
         default=None,

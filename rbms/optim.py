@@ -51,16 +51,19 @@ class SGD_cossim(SGD):
             group["lr"] = min(self.max_lr, learning_rate)
             self.prev_grad = curr_grad.clone()
         return super().step(closure)
-        
+    
 class NGD(Optimizer):
     # Added 'update_biases=True' flag to the initialization
-    def __init__(self, params, lr=0.001, cg_steps=30, init_reg=1e-8, alpha=1e-3, update_freq=1, warm_start=False, maximize=True, update_biases=True, cossim=False, l2_reg=0.0, n_unif=None, adaptive_reg=False):
-        defaults = dict(lr=lr, cg_steps=cg_steps, reg=init_reg, alpha=alpha, update_freq=update_freq, warm_start=warm_start, maximize=maximize, update_biases=update_biases, step=0)
+    def __init__(self, params, lr=0.001, cg_steps=10, init_reg=1e-6, alpha=1e-3, update_freq=1, warm_start=False, maximize=True, update_biases=True, cossim=False, l2_reg=0.0, n_unif=None, adaptive_reg=False, reg_top_gamma=1, k_top=1, top_warmup=1000):
+        defaults = dict(lr=lr, cg_steps=cg_steps, reg=init_reg, alpha=alpha, update_freq=update_freq, warm_start=warm_start, maximize=maximize, update_biases=update_biases, reg_top_gamma=reg_top_gamma, k_top=k_top, top_warmup=top_warmup, step=0)
         super().__init__(params, defaults)
         self.cossim = cossim
         self.lambda_eff = l2_reg
         self.n_unif = n_unif
         self.adaptive_reg = adaptive_reg
+        self.reg_top_gamma = reg_top_gamma
+        self.k_top = k_top
+        self.top_warmup = top_warmup
         for group in self.param_groups:
             for p in group['params']:
                 self.state[p]['last_dt'] = torch.zeros_like(p.data)
@@ -81,13 +84,13 @@ class NGD(Optimizer):
         
         trace_F = mean_norm_s_k_sq - norm_mean_s_sq
         D = model.weight_matrix.numel() 
-        
-        adaptive_reg = base_reg * trace_F.item() / D
-        return adaptive_reg # Ensure strict positivity 
+        self.trace_F_over_D = trace_F.item() / D  # Store for logging   
+        # adaptive_reg = base_reg * self.trace_F_over_D
+        return 1e-04 # Ensure strict positivity 
         # return 1e-8
     
     @torch.no_grad()
-    def _fvp(self, p_list, v_chain, tanh_term, reg, update_biases):
+    def _fvp(self, p_list, v_chain, tanh_term, reg, update_biases, u_top=None, reg_top=0.0):
         B = v_chain.size(0)
         
         # 1. Flatten v_chain to 2D: (B, N_v * N_s)
@@ -113,7 +116,13 @@ class NGD(Optimizer):
         
         # 3. Reshape back to original parameter shape using .view_as()
         Sx_w = Sx_w_flat.view_as(p_w)
-        
+        # --- anisotropic damping on the top visible mode(s) ---
+        if u_top is not None and reg_top != 0.0:
+            p_w_flat = p_w.view(-1, p_w.size(-1))        # (D_v, N_h)
+            proj = u_top @ (u_top.T @ p_w_flat)          # (D_v, N_h)
+            Sx_w = Sx_w + reg_top * proj.view_as(p_w)
+        # ------------------------------------------------------
+
         if update_biases:
             Sx_v_flat = (v_chain_flat.T @ O_dot_p_c) / B
             Sx_v = Sx_v_flat.view_as(p_v)
@@ -128,7 +137,7 @@ class NGD(Optimizer):
             params = group["params"]
             # lr = group["lr"]
             update_biases = group["update_biases"]
-            max_lr = 0.05/model.weight_matrix.numel()**0.5
+            max_lr = 5/model.weight_matrix.numel()**0.5
             g = [p.grad.clone() for p in params]
             
             if group["step"] % group["update_freq"] == 0 or group["step"] == 1:
@@ -141,7 +150,32 @@ class NGD(Optimizer):
                     self.reg = max(adaptive_term, group["reg"])
                 else:
                     self.reg = group["reg"]
+
                 # FLAG LOGIC: Filter parameters fed to the Conjugate Gradient solver
+                # top-k left singular vectors of W (visible-side modes)
+                W_flat = model.weight_matrix.detach().view(-1, model.weight_matrix.size(-1))
+                if self.reg_top_gamma > 0.0 and group["step"] > self.top_warmup:
+                    U, S, Vh = torch.linalg.svd(W_flat, full_matrices=False)
+                    u_top = U[:, :self.k_top].contiguous()          # (D_v, k)
+                    self.reg_top = self.reg_top_gamma * W_flat.size(0) * self.trace_F_over_D
+                    # self.reg_top = self.reg_top_gamma * W_flat.size(0) 
+                    # self.reg_top = self.reg_top_gamma
+                    # ipr = 1/torch.sum(Vh[0]**4)  # inverse participation ratio
+                    # ratio = model.weight_matrix.size(0)*ipr
+                    # # nu from the CONDENSED ferromagnetic mode only.
+                    # m2 = (v_chain.mean(-1)**2).mean()          # <s>^2 proxy, see caveats
+                    # nu = ratio * S[0]**2 * m2
+                    # denom = 1 - 2/3 * nu
+                    # delta = 0.25
+                    # if denom < delta:
+                    #     self.reg_top = self.reg_top_gamma * (delta - denom)   # inject only the shortfall
+                    # else:
+                    #     self.reg_top = 0.0
+                    self.sv_top = S[:self.k_top].tolist()           # log this
+                else:
+                    u_top = None
+                    self.reg_top = 0.0
+
                 if update_biases:
                     active_params = params
                     active_grads = g
@@ -151,7 +185,7 @@ class NGD(Optimizer):
                 
                 if group["warm_start"] and group["step"] > 1:
                     delta_theta = [self.state[p]['last_dt'].clone() for p in active_params]
-                    S_dt = self._fvp(delta_theta, v_chain_eff, tanh_term, self.reg, update_biases)
+                    S_dt = self._fvp(delta_theta, v_chain_eff, tanh_term, self.reg, update_biases, u_top=u_top, reg_top=self.reg_top)
                     residual = [g_i - s_i for g_i, s_i in zip(active_grads, S_dt)]
                 else:
                     delta_theta = [torch.zeros_like(p) for p in active_params]
@@ -168,12 +202,12 @@ class NGD(Optimizer):
                 current_r_norm = initial_r_norm
                 self.cg_step = 0
                 
-                while (current_r_norm / initial_r_norm) > 0.01:
-                    if self.cg_step >= group["cg_steps"]:
-                        # print("CG broke due to reaching max iterations.")
-                        break
-                # for _ in range(group["cg_steps"]):
-                    S_p = self._fvp(p_vec, v_chain_eff, tanh_term, self.reg, update_biases)
+                # while (current_r_norm / initial_r_norm) > 0.05:
+                #     if self.cg_step >= group["cg_steps"]:
+                #         # print("CG broke due to reaching max iterations.")
+                #         break
+                for _ in range(group["cg_steps"]):
+                    S_p = self._fvp(p_vec, v_chain_eff, tanh_term, self.reg, update_biases, u_top=u_top, reg_top=self.reg_top)
                     p_Sp = sum(torch.sum(pv * spv) for pv, spv in zip(p_vec, S_p))
                     
                     if p_Sp.item() <= 0:
@@ -254,10 +288,20 @@ class NGD(Optimizer):
                         delta_theta[i] = delta_theta[i] + g_reg
             # -----------------------------------------------------
 
+            # --- per-step KL diagnostic: eps = 1/2 lr^2 * dt^T F dt ---
+            g_dot_x = sum(torch.sum(g_i * dt) for g_i, dt in zip(active_grads, delta_theta))
+            x_dot_x = sum(torch.sum(dt * dt) for dt in delta_theta)
+            xFx = (g_dot_x - self.reg * x_dot_x).clamp_min(0.0)
+            reg_quad = self.reg * x_dot_x
+            if getattr(self, "reg_top", 0.0) != 0.0 and u_top is not None:
+                dw = delta_theta[0].view(-1, delta_theta[0].size(-1))
+                reg_quad = reg_quad + self.reg_top * (u_top.T @ dw).pow(2).sum()
+            xFx = (g_dot_x - reg_quad).clamp_min(0.0)
+            self.epsilon = (0.5 * group["lr"]**2 * xFx)
+            
             direction = 1 if group["maximize"] else -1
             for p_tensor, dt in zip(active_params, delta_theta):
                 p_tensor.add_(dt, alpha=direction * group['lr'])
-
 
 def setup_optim(optim: str, args: dict, params: EBM) -> list[Optimizer]:
     match args["optim"]:
@@ -289,10 +333,12 @@ def setup_optim(optim: str, args: dict, params: EBM) -> list[Optimizer]:
                 update_freq=1, 
                 warm_start=True,
                 maximize=True,
-                update_biases=False,
-                cossim = False,
-                adaptive_reg = False,
-                l2_reg = args["L2_effective"]
+                update_biases=True,
+                cossim = args["ngd_cossim"],
+                adaptive_reg = True,
+                l2_reg = args["L2_effective"],
+                top_warmup=100,
+                reg_top_gamma=0.5
             )
         ]
     else:

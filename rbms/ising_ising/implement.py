@@ -200,10 +200,10 @@ def _compute_var_gradient(
     # (which applies F^{-1} built from p_rbm statistics) does not inadvertently
     # precondition the variance term, whose geometry lives under the uniform measure.
     weight_matrix.grad = grad_weight_matrix
-    # vbias.grad = grad_vbias
-    # hbias.grad = grad_hbias
-    vbias.grad = torch.zeros_like(vbias)
-    hbias.grad = torch.zeros_like(hbias)
+    vbias.grad = grad_vbias
+    hbias.grad = grad_hbias
+    # vbias.grad = torch.zeros_like(vbias)
+    # hbias.grad = torch.zeros_like(hbias)
 
     # Variance regularization gradients returned separately; the caller must add
     # them to the parameter update *after* any natural-gradient step.
@@ -220,6 +220,19 @@ def _compute_hamiltonian(
     field = v@J1
     interaction = ((v @ J2) * v).sum(1)
     return -field - 0.5*interaction
+
+# def _compute_hamiltonian(
+#     v:Tensor, J1: Tensor, J2:Tensor
+# ) -> Tensor:
+#     field = v@J1
+#     # interaction = ((v @ J2) * v).sum(1)
+#     interaction = (J2.max() * v * torch.roll(v, -1, dims=-1)).sum(-1)
+#     # if J3 is not None:
+#         # interaction_3 = torch.einsum("bi,bj,bk,ijk->b", v,v,v,J3)
+#     interaction_3= (J2.max()* v * torch.roll(v, -1, dims=-1) * torch.roll(v, -2, dims=-1)).sum(-1)
+#     # else:
+#     #     interaction_3 = 0.0
+#     return -field - interaction - 0.5*interaction_3
 
 def _init_chains(
     num_samples: int,
