@@ -222,7 +222,7 @@ def _compute_var_gradient(
 #     return -field - 0.5*interaction
 
 def _compute_hamiltonian(
-    v:Tensor, J1: Tensor, J2:Tensor, J3:Tensor 
+    v:Tensor, J1: Tensor, J2:Tensor
 ) -> Tensor:
     field = v@J1
     # interaction = ((v @ J2) * v).sum(1)
@@ -232,7 +232,7 @@ def _compute_hamiltonian(
     interaction_3= (J2.max()* v * torch.roll(v, -1, dims=-1) * torch.roll(v, -2, dims=-1)).sum(-1)
     # else:
     #     interaction_3 = 0.0
-    return -field - interaction - interaction_3
+    return -0.1*field - interaction - interaction_3
 
 # def _compute_hamiltonian(
 #     v:Tensor, J1: Tensor, J2:Tensor

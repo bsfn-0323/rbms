@@ -1,3 +1,7 @@
+
+import rbms
+print(rbms.__file__)
+
 import argparse
 
 import h5py
@@ -27,7 +31,6 @@ from rbms.training.implement import _init_training, _restore_training
 from rbms.training.pcd import train
 from rbms.training.utils import get_checkpoints
 
-
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Train a Restricted Boltzmann Machine")
     parser = add_args_dataset(parser)
@@ -52,9 +55,8 @@ def main(args, map_model=map_model):
         #load J1 J2
         temp = args['vartemp']
         J1 = torch.ones(args["num_visibles"]).to(args["dtype"]).to(args["device"])
+        # J1 = torch.randn(args["num_visibles"]).to(args["dtype"]).to(args["device"])
         J2 = torch.ones(args["num_visibles"],args["num_visibles"]).to(args["dtype"]).to(args["device"])
-
-
         J1 = J1/temp
         J2 = J2/temp
 
