@@ -337,7 +337,7 @@ def setup_optim(optim: str, args: dict, params: EBM) -> list[Optimizer]:
                 cossim = args["ngd_cossim"],
                 adaptive_reg = True,
                 l2_reg = args["L2_effective"],
-                top_warmup=100,
+                top_warmup=5,
                 reg_top_gamma=0.5
             )
         ]
