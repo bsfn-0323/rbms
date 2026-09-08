@@ -54,7 +54,7 @@ class SGD_cossim(SGD):
     
 class NGD(Optimizer):
     # Added 'update_biases=True' flag to the initialization
-    def __init__(self, params, lr=0.001, cg_steps=10, init_reg=1e-6, alpha=1e-3, update_freq=1, warm_start=False, maximize=True, update_biases=True, cossim=False, l2_reg=0.0, n_unif=None, adaptive_reg=False, reg_top_gamma=1, k_top=1, top_warmup=1000):
+    def __init__(self, params, lr=0.001, cg_steps=20, init_reg=1e-6, alpha=1e-3, update_freq=1, warm_start=False, maximize=True, update_biases=True, cossim=False, l2_reg=0.0, n_unif=None, adaptive_reg=False, reg_top_gamma=1, k_top=1, top_warmup=1000):
         defaults = dict(lr=lr, cg_steps=cg_steps, reg=init_reg, alpha=alpha, update_freq=update_freq, warm_start=warm_start, maximize=maximize, update_biases=update_biases, reg_top_gamma=reg_top_gamma, k_top=k_top, top_warmup=top_warmup, step=0)
         super().__init__(params, defaults)
         self.cossim = cossim
@@ -337,7 +337,7 @@ def setup_optim(optim: str, args: dict, params: EBM) -> list[Optimizer]:
                 cossim = args["ngd_cossim"],
                 adaptive_reg = True,
                 l2_reg = args["L2_effective"],
-                top_warmup=5,
+                top_warmup=50,
                 reg_top_gamma=0.5
             )
         ]
