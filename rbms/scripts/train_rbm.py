@@ -157,6 +157,9 @@ def main(args, map_model=map_model):
         lambda_l2=args["L2"],
         normalize_grad=args["normalize_grad"],
         max_grad_norm=args["max_norm_grad"],
+        lambda_eff_l2=args["L2_effective"],
+        model=params,
+        batch_size=args["batch_size"],
     )
 
     match args["training_type"]:

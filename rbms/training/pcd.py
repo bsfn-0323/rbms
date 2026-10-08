@@ -150,9 +150,9 @@ def train(
             for i in range(len(optimizer)):
                 pbar.write(f"    - {names_params[i]} : {learning_rates[i]:.6f}")
             if isinstance(optimizer[0], NGD):
-                pbar.write(f"scale : {opt.reg:.3g}")
+                pbar.write(f"scale : {opt.reg_top:.3g}")
                 pbar.write(f"cg steps: {opt.cg_step}")
-                pbar.write(f"epsilon : {opt.epsilon}")
+                pbar.write(f"trace_F_over_D : {opt.trace_F_over_D}")
 
             if variational:
                 pbar.write("loss : ")

@@ -58,15 +58,15 @@ class IIRBM(RBM):
         self.hbias = hbias.to(device=self.device, dtype=self.dtype)
         self.name = "IIRBM"
         self.flags = []
-        self._rand_buf_idx: int = 0
-        self.random_chain_buffer: Tensor = (
-            torch.bernoulli(
-                torch.full(
-                    (num_rand_samples, self.num_visibles), 0.5,
-                    device=self.device, dtype=self.dtype,
-                )
-            ) * 2 - 1
-        )
+        # self._rand_buf_idx: int = 0
+        # self.random_chain_buffer: Tensor = (
+        #     torch.bernoulli(
+        #         torch.full(
+        #             (num_rand_samples, self.num_visibles), 0.5,
+        #             device=self.device, dtype=self.dtype,
+        #         )
+        #     ) * 2 - 1
+        # )
 
     def __add__(self, other):
         return IIRBM(
@@ -122,12 +122,13 @@ class IIRBM(RBM):
             weight_matrix=self.weight_matrix,
         )
 
-    def compute_energy_visible_gradient(self, v: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    def compute_energy_visible_gradient(self, v: Tensor, compute_weight_grad = False) -> Tuple[Tensor, Tensor, Tensor]:
         return _compute_energy_visibles_gradient(
             v=v,
             vbias=self.vbias,
             hbias=self.hbias,
             weight_matrix=self.weight_matrix,
+            compute_weight_grad=compute_weight_grad
         )
     
     def compute_gradient(self, data, chains, centered=True):
@@ -144,19 +145,19 @@ class IIRBM(RBM):
             centered=centered,
         )
 
-    def _get_random_chain(self, B: int) -> Tensor:
-        N = self.random_chain_buffer.shape[0]
-        if self._rand_buf_idx + B > N:
-            perm = torch.randperm(N, device=self.random_chain_buffer.device)
-            self.random_chain_buffer = self.random_chain_buffer[perm]
-            self._rand_buf_idx = 0
-        chunk = self.random_chain_buffer[self._rand_buf_idx : self._rand_buf_idx + B]
-        self._rand_buf_idx += B
-        return chunk
+    # def _get_random_chain(self, B: int) -> Tensor:
+    #     N = self.random_chain_buffer.shape[0]
+    #     if self._rand_buf_idx + B > N:
+    #         perm = torch.randperm(N, device=self.random_chain_buffer.device)
+    #         self.random_chain_buffer = self.random_chain_buffer[perm]
+    #         self._rand_buf_idx = 0
+    #     chunk = self.random_chain_buffer[self._rand_buf_idx : self._rand_buf_idx + B]
+    #     self._rand_buf_idx += B
+    #     return chunk
 
     def compute_var_gradient(self, J1, J2, chains, eta):
         B = chains["visible"].shape[0] 
-        random_chain = self._get_random_chain(B)
+        # random_chain = self._get_random_chain(B)
         return _compute_var_gradient(
             J1=J1,
             J2=J2,
@@ -167,7 +168,7 @@ class IIRBM(RBM):
             hbias=self.hbias,
             weight_matrix=self.weight_matrix,
             l2_reg=eta,
-            random_chain=random_chain,
+            # random_chain=random_chain,
         )
 
     def independent_model(self):
@@ -286,7 +287,7 @@ class IIRBM(RBM):
         self.weight_matrix = self.weight_matrix.to(device=self.device, dtype=self.dtype)
         self.vbias = self.vbias.to(device=self.device, dtype=self.dtype)
         self.hbias = self.hbias.to(device=self.device, dtype=self.dtype)
-        self.random_chain_buffer = self.random_chain_buffer.to(device=self.device, dtype=self.dtype)
+        # self.random_chain_buffer = self.random_chain_buffer.to(device=self.device, dtype=self.dtype)
         return self
 
     def get_metrics(self, metrics):

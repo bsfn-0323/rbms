@@ -54,12 +54,14 @@ class SGD_cossim(SGD):
     
 class NGD(Optimizer):
     # Added 'update_biases=True' flag to the initialization
-    def __init__(self, params, lr=0.001, cg_steps=20, init_reg=1e-6, alpha=1e-3, update_freq=1, warm_start=False, maximize=True, update_biases=True, cossim=False, l2_reg=0.0, n_unif=None, adaptive_reg=False, reg_top_gamma=1, k_top=1, top_warmup=1000):
+    def __init__(self, params, lr=0.001, cg_steps=10, init_reg=1e-6, alpha=1e-3, update_freq=1,
+                 warm_start=False, maximize=True, update_biases=True, cossim=False, adaptive_reg=False, reg_top_gamma=1, k_top=1, top_warmup=1000
+                 ):
         defaults = dict(lr=lr, cg_steps=cg_steps, reg=init_reg, alpha=alpha, update_freq=update_freq, warm_start=warm_start, maximize=maximize, update_biases=update_biases, reg_top_gamma=reg_top_gamma, k_top=k_top, top_warmup=top_warmup, step=0)
         super().__init__(params, defaults)
         self.cossim = cossim
-        self.lambda_eff = l2_reg
-        self.n_unif = n_unif
+
+
         self.adaptive_reg = adaptive_reg
         self.reg_top_gamma = reg_top_gamma
         self.k_top = k_top
@@ -71,7 +73,7 @@ class NGD(Optimizer):
     @torch.no_grad()
     def _get_adaptive_reg(self, v_chain_eff, tanh_term, model, base_reg): # <-- Use v_chain_eff
         B = v_chain_eff.size(0)
-        
+        self.eff_l2_batch_size = B
         # Flatten the 3D one-hot tensor to 2D
         v_flat = v_chain_eff.view(B, -1)
         
@@ -132,6 +134,7 @@ class NGD(Optimizer):
             return [Sx_w + reg * p_w]
     @torch.no_grad()
     def step(self, v_chain, model, scale=1, closure=None): 
+        N = v_chain.shape[-1]
         for group in self.param_groups:
             group["step"] += 1
             params = group["params"]
@@ -141,7 +144,7 @@ class NGD(Optimizer):
             g = [p.grad.clone() for p in params]
             
             if group["step"] % group["update_freq"] == 0 or group["step"] == 1:
-                grad_v, grad_h, _ = model.compute_energy_visible_gradient(v_chain)
+                _,grad_v, grad_h = model.compute_energy_visible_gradient(v_chain)
                 
                 v_chain_eff = -grad_v
                 tanh_term = -grad_h
@@ -155,23 +158,25 @@ class NGD(Optimizer):
                 # top-k left singular vectors of W (visible-side modes)
                 W_flat = model.weight_matrix.detach().view(-1, model.weight_matrix.size(-1))
                 if self.reg_top_gamma > 0.0 and group["step"] > self.top_warmup:
-                    U, S, Vh = torch.linalg.svd(W_flat, full_matrices=False)
+                    U, S, _ = torch.linalg.svd(W_flat, full_matrices=False)
+                    # ones = torch.ones_like(S).reshape(-1, 1)/N**0.5
+                    # overlaps = (U.T@ones).flatten().abs()
+
+                    # # self.top_idx = torch.argmax(overlaps)
+                    # ones = torch.ones(W_flat.size(0), 1, device=W_flat.device, dtype=W_flat.dtype)
+                    # ones = ones / ones.norm()
+                    # overlaps = (U.T @ ones).flatten().abs()
+                    # idx = int(torch.argmax(overlaps))
+                    # if S[self.k_top]>1:
                     u_top = U[:, :self.k_top].contiguous()          # (D_v, k)
-                    self.reg_top = self.reg_top_gamma * W_flat.size(0) * self.trace_F_over_D
-                    # self.reg_top = self.reg_top_gamma * W_flat.size(0) 
-                    # self.reg_top = self.reg_top_gamma
-                    # ipr = 1/torch.sum(Vh[0]**4)  # inverse participation ratio
-                    # ratio = model.weight_matrix.size(0)*ipr
-                    # # nu from the CONDENSED ferromagnetic mode only.
-                    # m2 = (v_chain.mean(-1)**2).mean()          # <s>^2 proxy, see caveats
-                    # nu = ratio * S[0]**2 * m2
-                    # denom = 1 - 2/3 * nu
-                    # delta = 0.25
-                    # if denom < delta:
-                    #     self.reg_top = self.reg_top_gamma * (delta - denom)   # inject only the shortfall
-                    # else:
-                    #     self.reg_top = 0.0
-                    self.sv_top = S[:self.k_top].tolist()           # log this
+                    # u_top = U[:, idx:idx+1].contiguous()
+
+                    self.reg_top =200
+                    
+                    self.sv_top = S[self.k_top].tolist()           # log this
+        
+                    # print(f"Overlap[{idx}] = {overlaps[idx]:.3f}")
+
                 else:
                     u_top = None
                     self.reg_top = 0.0
@@ -261,33 +266,6 @@ class NGD(Optimizer):
                 group['lr'] = min(group['lr'], max_lr)
             # ------------------------------------------------------
 
-            # --- ℓ2 regularization of effective-coupling space ---
-            # Penalty R = (λ/2) Var_u[E], gradient ∇_θ R = λ Cov_u(∂_θ E, E).
-            # We subtract ∇R from delta_theta (un-preconditioned, after CG) so that
-            # the net parameter update descends on R and Var_u[E] decreases.
-            # Uniform samples come from the model's pre-allocated buffer (Ising ±1).
-            if self.lambda_eff != 0.0:
-                n_u = self.n_unif if self.n_unif is not None else v_chain.size(0)
-                ridx = torch.randint(0, model.random_chain_buffer.size(0), (n_u,), device=model.device)
-                v_unif = model.random_chain_buffer[ridx]
-                E_unif = model.compute_energy_visibles(v_unif)
-                E_c = E_unif - E_unif.mean()                            # (n_u,)
-                tanh_u = torch.tanh(model.hbias + v_unif @ model.weight_matrix)  # (n_u, N_h)
-                for i, p_tensor in enumerate(active_params):
-                    if p_tensor is model.weight_matrix:
-                        # Cov_u(∂_W E, E) = -(v_unif.T @ (tanh_u * E_c[:,None])) / n_u
-                        g_reg = self.lambda_eff * ((v_unif.T @ (tanh_u * E_c.unsqueeze(1))) / n_u)
-                        delta_theta[i] = delta_theta[i] + g_reg
-                    elif update_biases and p_tensor is model.vbias:
-                        # Cov_u(∂_vbias E, E) = -(v_unif.T @ E_c) / n_u
-                        g_reg = self.lambda_eff * ((v_unif.T @ E_c) / n_u)
-                        delta_theta[i] = delta_theta[i] + g_reg
-                    elif update_biases and p_tensor is model.hbias:
-                        # Cov_u(∂_hbias E, E) = -(tanh_u.T @ E_c) / n_u
-                        g_reg = self.lambda_eff * ((tanh_u.T @ E_c) / n_u)
-                        delta_theta[i] = delta_theta[i] + g_reg
-            # -----------------------------------------------------
-
             # --- per-step KL diagnostic: eps = 1/2 lr^2 * dt^T F dt ---
             g_dot_x = sum(torch.sum(g_i * dt) for g_i, dt in zip(active_grads, delta_theta))
             x_dot_x = sum(torch.sum(dt * dt) for dt in delta_theta)
@@ -336,8 +314,7 @@ def setup_optim(optim: str, args: dict, params: EBM) -> list[Optimizer]:
                 update_biases=True,
                 cossim = args["ngd_cossim"],
                 adaptive_reg = True,
-                l2_reg = args["L2_effective"],
-                top_warmup=10,
+                top_warmup=3,
                 reg_top_gamma=0.5
             )
         ]

@@ -1,5 +1,7 @@
 import torch
 from torch.optim import Optimizer
+from rbms.classes import EBM
+from torch import Tensor
 
 
 class L1Regularization(torch.nn.Module):
@@ -25,6 +27,36 @@ class L2Regularization(torch.nn.Module):
             for p in opt.param_groups[0]["params"]:
                 p.grad -= self.lambda_l2 * p
 
+class EffectiveL2Regularization(torch.nn.Module):
+    def __init__(self, optimizer: list[Optimizer], lambda_eff_l2: float, *args, **kwargs):
+        # super().__init__(*args, **kwargs)
+        super().__init__()
+        self.optimizer = optimizer
+        self.lambda_eff_l2 = lambda_eff_l2
+        self.model: EBM = kwargs["model"]
+        self.batch_size = kwargs["batch_size"]
+        self.penalty: dict[int, Tensor] = {}
+    
+    def forward(self, input):
+        self.penalty = {}
+        v = 2*torch.randint(0, 2, (self.batch_size,self.model.num_visibles), device=self.model.device, dtype=self.model.dtype) - 1
+        energy = self.model.compute_energy_visibles({"visible": v})
+        energy_gradient = self.model.compute_energy_visible_gradient(v,compute_weight_grad = True)
+        param_index = {id(p): i for i, p in enumerate(self.model.parameters())}
+
+        for opt in self.optimizer:
+            for p in opt.param_groups[0]["params"]:
+                i = param_index[id(p)]
+                aux_energy = energy.clone()
+                for _ in range(energy_gradient[i].dim() - 1):
+                    aux_energy = aux_energy.unsqueeze(-1)
+                penalty = ((aux_energy - aux_energy.mean(axis=0, keepdim=True))
+                           *(energy_gradient[i] - energy_gradient[i].mean(axis=0, keepdim=True))
+                )
+
+                curr_penalty = -self.lambda_eff_l2 * penalty.mean(axis=0)
+                p.grad += curr_penalty
+                self.penalty[id(p)] = curr_penalty.detach()
 
 class ClipGradNorm(torch.nn.Module):
     def __init__(self, optimizer: list[Optimizer], max_grad_norm, *args, **kwargs):
@@ -57,6 +89,7 @@ def build_pre_grad_update(
     optimizer: list[Optimizer],
     lambda_l1: float,
     lambda_l2: float,
+    lambda_eff_l2: float,
     normalize_grad: bool,
     max_grad_norm: float,
     **kwargs,
@@ -67,6 +100,8 @@ def build_pre_grad_update(
             * (lambda_l1 > 0),
             *[L2Regularization(optimizer=optimizer, lambda_l2=lambda_l2)]
             * (lambda_l2 > 0),
+            *[EffectiveL2Regularization(optimizer=optimizer, lambda_eff_l2=lambda_eff_l2, **kwargs)]
+            * (lambda_eff_l2 > 0),
             *[NormalizeGrad(optimizer=optimizer)] * normalize_grad,
             *[ClipGradNorm(optimizer=optimizer, max_grad_norm=max_grad_norm)]
             * (max_grad_norm > 0),
